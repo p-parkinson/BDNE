@@ -1,29 +1,18 @@
-# README #
+# README - BDNE #
 
-This README would normally document whatever steps are necessary to get your application up and running.
+**Author** - Patrick Parkinson [patrick.parkinson@manchester.ac.uk](mailto:patrick.parkinson@manchester.ac.uk)
 
-### What is this repository for? ###
+BDNE is code to connect to and explore the big-data for nano-electronics
+dataset hosted on AWS. It allows retrieval of _measurements_ (results of _experiments_) for
+_objects_ which are associated with unique _entities_ for different _samples_. Each
+term is linked to a database table.
 
-* Quick summary
-* Version
-* [Learn Markdown](https://bitbucket.org/tutorials/markdowndemo)
+The database is designed to hold and store information for functional nanomaterials,
+and to allow analysis of this data.
 
 ### How do I get set up? ###
 
-* Summary of set up
+* Set up - *Python 3*
 * Configuration
-* Dependencies
-* Database configuration
-* How to run tests
-* Deployment instructions
-
-### Contribution guidelines ###
-
-* Writing tests
-* Code review
-* Other guidelines
-
-### Who do I talk to? ###
-
-* Repo owner or admin
-* Other community or team contact
+* Dependencies - *matplotlib, numpy, sqlalchemy*
+* Database configuration - runs against *db.oms-lab.org*
