@@ -1,7 +1,6 @@
 # Testing code for accessing data in AWS database
 
 import numpy as np
-from matlab_serialise import serialise, deserialise
 import matplotlib.pyplot as plt
 from db_orm import *
 
@@ -20,7 +19,7 @@ def fetch_random(all_measurements: np.ndarray, n: int) -> np.ndarray:
 def show_images(pic_data: np.ndarray):
     # iterate over each image and show it
     for i in range(len(pic_data)):
-        data = deserialise(pic_data[i][1])
+        data = pic_data[i][1]
         plt.subplot(3, 4, i + 1)
         plt.imshow(data)
         plt.xticks([])
@@ -34,7 +33,7 @@ def show_images(pic_data: np.ndarray):
 def show_spectra(spectra_data: np.ndarray):
     # iterate over each spectra and show it
     for i in range(len(spectra_data)):
-        data = deserialise(spectra_data[i][1])
+        data = spectra_data[i][1]
         plt.subplot(3, 4, i + 1)
         plt.plot(data)
         plt.yticks([])

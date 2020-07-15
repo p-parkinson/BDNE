@@ -5,9 +5,12 @@
 from sqlalchemy.orm import Session, relationship
 from sqlalchemy import create_engine, Integer, ForeignKey, Text, String, Column, DateTime, LargeBinary
 from sqlalchemy.ext.declarative import declarative_base
+import sqlalchemy.types as types
 import configparser
 import os
 from datetime import datetime
+from matlab_serialise import serialise, deserialise
+
 # Get current path (required for locating config.ini)
 package_directory = os.path.dirname(os.path.abspath(__file__))
 
@@ -22,8 +25,19 @@ engine = create_engine('mysql+mysqlconnector://%s:%s@db.oms-lab.org:3306/bdne' %
     config.get('DATABASE', 'user'), config.get('DATABASE', 'pass')))
 
 
-# Set up the tables
+# Set up serialise/deserialise
+class MATLAB(types.TypeDecorator):
+    """Converts to and from hlp_serialised MATLAB form on the fly"""
+    impl = types.LargeBinary
 
+    def process_bind_param(self, value, dialect):
+        return serialise(value)
+
+    def process_result_value(self, value, dialect):
+        return deserialise(value)
+
+
+# Set up the tables
 class Object(decBase):
     """Object SQLAlchemy Table"""
     __tablename__ = 'object'
@@ -87,9 +101,8 @@ class Measurement(decBase):
     ID = Column(Integer, primary_key=True)
     experiment_ID = Column(Integer, ForeignKey('experiment.ID'), autoincrement=True)
     object_ID = Column(Integer, ForeignKey('object.ID'))
-    data = Column(LargeBinary(length=16777215))
+    data = Column(MATLAB)
     created = Column(DateTime, default=datetime.now())
-
     object = relationship('object', back_populates='measurement')
 
 
