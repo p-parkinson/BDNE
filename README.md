@@ -14,5 +14,5 @@ and to allow analysis of this data.
 
 * Set up - *Python 3*
 * Configuration
-* Dependencies - *matplotlib, numpy, sqlalchemy*
+* Dependencies - *matplotlib, numpy, sqlalchemy, pandas*
 * Database configuration - runs against *db.oms-lab.org*
