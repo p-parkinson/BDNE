@@ -8,6 +8,7 @@ from sqlalchemy.ext.declarative import declarative_base
 import sqlalchemy.types as types
 import configparser
 import os
+import zlib
 from datetime import datetime
 from matlab_serialise import serialise, deserialise
 
@@ -35,6 +36,9 @@ class MATLAB(types.TypeDecorator):
         return serialise(value)
 
     def process_result_value(self, value, dialect):
+        if value[0] == 201:
+            # Dataset is compressed. Cut first value, decompress with zlib
+            value = zlib.decompress(value[1:])
         return deserialise(value)
 
 
