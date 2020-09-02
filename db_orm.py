@@ -21,8 +21,9 @@ config.read(os.path.join(package_directory, 'config.ini'))
 # Create base autoloader
 decBase = declarative_base()
 # Connect to the database using credentials from config.ini
-engine = create_engine('mysql+mysqlconnector://%s:%s@db.oms-lab.org:3306/bdne' % (
-    config.get('DATABASE', 'user'), config.get('DATABASE', 'pass')))
+engine = create_engine('mysql+mysqlconnector://%s:%s@%s:%s/bdne' % (
+    config.get('DATABASE', 'user'), config.get('DATABASE', 'pass'),
+    config.get('DATABASE', 'server'), config.get('DATABASE', 'port')))
 
 
 # Set up serialise/deserialise
