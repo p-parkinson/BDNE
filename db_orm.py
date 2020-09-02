@@ -3,7 +3,7 @@
 # Date : 30/06/2020
 
 from sqlalchemy.orm import Session, relationship
-from sqlalchemy import create_engine, Integer, ForeignKey, Text, String, Column, DateTime, LargeBinary
+from sqlalchemy import create_engine, Integer, ForeignKey, Text, String, Column, DateTime
 from sqlalchemy.ext.declarative import declarative_base
 import sqlalchemy.types as types
 import configparser
@@ -11,6 +11,7 @@ import os
 import zlib
 from datetime import datetime
 from matlab_serialise import serialise, deserialise
+from numpy import ndarray
 
 # Get current path (required for locating config.ini)
 package_directory = os.path.dirname(os.path.abspath(__file__))
@@ -30,16 +31,26 @@ engine = create_engine('mysql+mysqlconnector://%s:%s@%s:%s/bdne' % (
 # Set up serialise/deserialise
 class MATLAB(types.TypeDecorator):
     """Converts to and from hlp_serialised MATLAB form on the fly"""
-    impl = types.LargeBinary
+    impl = types.String
 
     def process_bind_param(self, value, dialect):
         return serialise(value)
 
-    def process_result_value(self, value, dialect):
+    def process_result_value(self, value, dialect) -> ndarray:
+        # Fix for odd error in LargeBinary (see
+        # https://github.com/sqlalchemy/sqlalchemy/issues/5073#issuecomment-582953477)
+        # where incorrect encoding appears
+        if isinstance(value, str):
+            value = bytes(value, 'utf-8')
+        elif value is not None:
+            value = bytes(value)
+        # Check for compression
         if value[0] == 201:
             # Dataset is compressed. Cut first value, decompress with zlib
             value = zlib.decompress(value[1:])
-        return deserialise(value)
+        # Deserialise via MATLAB
+        value = deserialise(value)
+        return value
 
 
 # Set up the tables
