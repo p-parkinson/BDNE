@@ -14,5 +14,5 @@ and to allow analysis of this data.
 
 * Set up - *Python 3*
 * Configuration
-* Dependencies - *matplotlib, numpy, sqlalchemy, pandas*
-* Database configuration - runs against *db.oms-lab.org*
+* Dependencies - *matplotlib, numpy, sqlalchemy, pandas, zlib*
+* Database configuration - runs against BDNE database server such as *db_uom.oms-lab.org*
