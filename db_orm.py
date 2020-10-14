@@ -1,16 +1,22 @@
 # SQLAlchemy-based ORM model for the BDNE project
 # Author : Patrick Parkinson <patrick.parkinson@manchester.ac.uk>
-# Date : 30/06/2020
 
+# SQLAlchemy used for database connection
 from sqlalchemy.orm import Session, relationship
 from sqlalchemy import create_engine, Integer, ForeignKey, Text, String, Column, DateTime
 from sqlalchemy.ext.declarative import declarative_base
 import sqlalchemy.types as types
+# Configparser used for configuration settings
 import configparser
+# OS used for configuration settings
 import os
+# Zlib used for compression for data
 import zlib
+# Datetime for column definitions
 from datetime import datetime
+# Matlab serialise for numpy->matlab and matlab->numpy conversion
 from matlab_serialise import serialise, deserialise
+# Numpy for handling numeric data
 from numpy import ndarray
 
 # Get current path (required for locating config.ini)
@@ -27,6 +33,10 @@ engine = create_engine('mysql+mysqlconnector://%s:%s@%s:%s/bdne' % (
     config.get('DATABASE', 'user'), config.get('DATABASE', 'pass'),
     config.get('DATABASE', 'server'), config.get('DATABASE', 'port')))
 
+
+############################################################################
+# Custom class for data in database
+############################################################################
 
 # Set up serialise/deserialise
 class MATLAB(types.TypeDecorator):
@@ -53,7 +63,10 @@ class MATLAB(types.TypeDecorator):
         return value
 
 
-# Set up the tables
+############################################################################
+# Define all tables in the database
+############################################################################
+
 class Object(decBase):
     """Object SQLAlchemy Table"""
     __tablename__ = 'object'
@@ -121,6 +134,7 @@ class Measurement(decBase):
     created = Column(DateTime, default=datetime.now())
     object = relationship('object', back_populates='measurement')
 
-
-# Set up a session
+############################################################################
+# Set up and connect database session
+############################################################################
 session = Session(engine)
