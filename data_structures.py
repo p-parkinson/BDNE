@@ -1,4 +1,4 @@
-# Definition of a single wire for BDNE project
+# Definition of data structures for BDNE project
 # Author : Patrick Parkinson <patrick.parkinson@manchester.ac.uk>
 # Date : 14/10/2020
 
@@ -6,11 +6,18 @@
 from db_orm import *
 
 
-class wire:
+#################################################################
+#   A single wire class
+#################################################################
+class Wire:
     """A class for a single nanowire"""
     db_id = None
     experiment_container = []
     cache = False
+
+    def __repr__(self):
+        """Representation"""
+        return "{} ID={}".format(self.__class__.__name__, self.db_id)
 
     def __init__(self, db_id=None, cache=False):
         """Initialise the wire class as empty or with a db_id. Cache is optional, can reduce database hits."""
@@ -57,3 +64,28 @@ class wire:
             return stm.all()[0]
         else:
             raise KeyError('Measurement ID {} not found in database'.format(exp_id))
+
+
+#################################################################
+#   WireCollection (a collection of wires)
+#   TODO: Add methods for single wire, group of wire, and data retrieval
+#################################################################
+
+class WireCollection:
+    db_ids = []
+
+    def __repr__(self):
+        """Representation"""
+        return "{} IDs={}".format(self.__class__.__name__, len(self.db_ids))
+
+
+#################################################################
+#   MeasurementCollection
+#################################################################
+
+class MeasurementCollection:
+    db_ids = []
+
+    def __repr__(self):
+        """Representation"""
+        return "{} IDs={}".format(self.__class__.__name__, len(self.db_ids))
