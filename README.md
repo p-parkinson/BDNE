@@ -16,3 +16,25 @@ and to allow analysis of this data.
 * Configuration
 * Dependencies - *matplotlib, numpy, sqlalchemy, pandas, zlib*
 * Database configuration - runs against BDNE database server such as *db_uom.oms-lab.org*
+
+### How do I use it? ###
+#### Low level functionality ####
+You must have a copy of config.ini which should look like:
+```
+[DATABASE]
+user = ###
+pass = ###
+server = db_uom.oms-lab.org
+port = 3306
+```
+You can import the main function using `import db_orm`. 
+
+#### High-level functionality ####
+
+Three classes are implemented for higher-level functionality, within the ```data_structures``` file.
+```
+Wire
+WireCollection
+MeasurementCollection
+```
+These should be used for handling data and processing, and connect into the ```db_orm``` backend.
