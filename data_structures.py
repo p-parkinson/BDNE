@@ -4,6 +4,7 @@
 
 # Import for database
 from db_orm import *
+import random
 
 
 #################################################################
@@ -19,7 +20,7 @@ class Wire:
         """Representation"""
         return "{} ID={}".format(self.__class__.__name__, self.db_id)
 
-    def __init__(self, db_id=None, cache=False):
+    def __init__(self, db_id=None):
         """Initialise the wire class as empty or with a db_id. Cache is optional, can reduce database hits."""
         if db_id is None:
             return
@@ -68,7 +69,6 @@ class Wire:
 
 #################################################################
 #   WireCollection (a collection of wires)
-#   TODO: Add methods for single wire, group of wire, and data retrieval
 #################################################################
 
 class WireCollection:
@@ -78,6 +78,27 @@ class WireCollection:
         """Representation"""
         return "{} IDs={}".format(self.__class__.__name__, len(self.db_ids))
 
+    def __init__(self, startid=None):
+        if type(startid) is list:
+            self.db_ids = startid
+
+    def loadsample(self, sampleid):
+        stm = session.query(Entity.ID).filter(Entity.sampleID == sampleid)
+        self.db_ids = [i[0] for i in stm.all()]
+        if not self.db_ids:
+            raise Warning('No wires found with sample ID {}'.format(sampleid))
+
+    def get(self, ID):
+        # Two approaches
+        if type(ID) is int:
+            # Return single wire
+            return Wire(self.db_ids[ID])
+        if type(ID) is str:
+            # Return a measurement collection
+            stm = session.query(Measurement.ID).join(Object).join(Entity).join(Experiment).filter(
+                Entity.ID.in_(self.db_ids), Experiment.type == ID)
+            return MeasurementCollection([i[0] for i in stm.all()])
+
 
 #################################################################
 #   MeasurementCollection
@@ -85,7 +106,32 @@ class WireCollection:
 
 class MeasurementCollection:
     db_ids = []
+    cursor = -1
+
+    def __init__(self, measurementids=None):
+        if type(measurementids) is list:
+            self.db_ids = measurementids
 
     def __repr__(self):
         """Representation"""
         return "{} IDs={}".format(self.__class__.__name__, len(self.db_ids))
+
+    def sample(self, k=1):
+        # Get a random selection of measurements
+        selected = random.choices(self.db_ids, k=k)
+        stm = session.query(Measurement.data).filter(Measurement.ID.in_(selected))
+        return [i[0] for i in stm.all()]
+
+    def collect(self):
+        # Get all measurements
+        stm = session.query(Measurement.data).filter(Measurement.ID.in_(self.db_ids))
+        return [i[0] for i in stm.all()]
+
+    def __next__(self):
+        # To iterate
+        self.cursor = self.cursor + 1
+        stm = session.query(Measurement.data).filter(Measurement.ID == self.db_ids[self.cursor])
+        return stm.first()
+
+    def __iter__(self):
+        return self
