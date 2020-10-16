@@ -1,6 +1,5 @@
 # Definition of data structures for BDNE project
 # Author : Patrick Parkinson <patrick.parkinson@manchester.ac.uk>
-# Date : 14/10/2020
 
 # Import for database
 from db_orm import *
@@ -94,10 +93,11 @@ class WireCollection:
             # Return single wire
             return Wire(self.db_ids[ID])
         if type(ID) is str:
-            # Return a measurement collection
-            stm = session.query(Measurement.ID).join(Object).join(Entity).join(Experiment).filter(
+            # Return a measurement collection with associated entity (to backreference)
+            stm = session.query(Measurement.ID, Entity.ID).select_from(Measurement).join(Object).join(Entity).join(Experiment).filter(
                 Entity.ID.in_(self.db_ids), Experiment.type == ID)
-            return MeasurementCollection([i[0] for i in stm.all()])
+            ret = stm.all()
+            return MeasurementCollection([i[0] for i in ret], [i[1] for i in ret])
 
 
 #################################################################
@@ -106,11 +106,16 @@ class WireCollection:
 
 class MeasurementCollection:
     db_ids = []
+    entity_ids = []
     cursor = -1
 
-    def __init__(self, measurementids=None):
+    def __init__(self, measurementids=None, entityids=None):
         if type(measurementids) is list:
-            self.db_ids = measurementids
+            if len(measurementids) == len(entityids):
+                self.db_ids = measurementids
+                self.entity_ids = entityids
+            else:
+                raise RuntimeError('Both measurementid and entityid must be provided with the same length.')
 
     def __repr__(self):
         """Representation"""
