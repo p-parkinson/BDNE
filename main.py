@@ -29,14 +29,20 @@ print('Obtained measurement set with {} measurements'.format(len(lengths.db_ids)
 ####################################################################
 # Plot the image and spectra
 plt.clf()
+
+# Show image
 plt.subplot(221)
 plt.imshow(wire.get('pic'))
 plt.title('Pic {}'.format(wire.db_id))
+
+# Show spectra
 plt.subplot(222)
 plt.plot(wire.get('spectra'))
 plt.title('Spectra')
 plt.ylabel('PL (arb)')
 plt.xlabel('Spectra (arb)')
+
+# Show histogram of length data
 plt.subplot(212)
 plt.hist(lengths.collect())
 yl = plt.ylim()
@@ -44,4 +50,6 @@ plt.plot(wire.get('l')*[1,1],yl)
 plt.title('Lengths of {} wires'.format(len(w.db_ids)))
 plt.xlabel('Length (um)')
 plt.ylabel('Frequency')
+
+# Update plot
 plt.show()

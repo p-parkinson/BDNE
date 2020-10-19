@@ -41,7 +41,19 @@ These should be used for handling data and processing, and connect into the ```d
 
 Example code is provided in ```main.py```. The containers WireCollection and MeasurementCollection are iterable:
 ```python
-for wire in WireCollection:
+import data_structures
+wc = data_structures.WireCollection()
+wc.loadsample(25)
+for wire in wc:
     # Process this wire, i.e. spectra
     s = wire.get('spectra')
+
+data = wc.get('l')
+# SLOW, inefficient as results in a lot of server overhead
+for d in data:
+    # Iterate over every l value
+    process(d)
+# FASTER but slow setup potentially large memory requirements 
+# (single SQL call, get all data at once)
+d = data.collect()
 ```
