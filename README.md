@@ -3,7 +3,7 @@
 **Author** - Patrick Parkinson [patrick.parkinson@manchester.ac.uk](mailto:patrick.parkinson@manchester.ac.uk)
 
 BDNE is code to connect to and explore the big-data for nano-electronics
-dataset hosted on AWS. It allows retrieval of _measurements_ (results of _experiments_) for
+dataset. It allows retrieval of _measurements_ (results of _experiments_) for
 _objects_ which are associated with unique _entities_ for different _samples_. Each
 term is linked to a database table.
 
@@ -38,3 +38,10 @@ WireCollection
 MeasurementCollection
 ```
 These should be used for handling data and processing, and connect into the ```db_orm``` backend.
+
+Example code is provided in ```main.py```. The containers WireCollection and MeasurementCollection are iterable:
+```python
+for wire in WireCollection:
+    # Process this wire, i.e. spectra
+    s = wire.get('spectra')
+```
