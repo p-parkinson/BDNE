@@ -3,7 +3,10 @@
 
 # Import for database
 from db_orm import *
+# For sampling from set
 import random
+# For conversion
+import numpy as np
 
 
 #################################################################
@@ -61,7 +64,7 @@ class Wire:
         # Retrieve experiment results from database
         stm = session.query(Measurement.data).filter(Measurement.ID == exp_id)
         if len(stm.all()) == 1:
-            return stm.all()[0]
+            return stm.all()[0][0]
         else:
             raise KeyError('Measurement ID {} not found in database'.format(exp_id))
 
@@ -71,13 +74,20 @@ class Wire:
 #################################################################
 
 class WireCollection:
+    """A collection of wires. Lazy handling, stores only db_ids for the wires and returns either a wire, a set of wires,
+     or a set of measurements.
+      Typical usage:
+      ``w = WireCollection();
+      w.loadsample(25);``"""
     db_ids = []
+    cursor = -1
 
     def __repr__(self):
         """Representation"""
         return "{} IDs={}".format(self.__class__.__name__, len(self.db_ids))
 
     def __init__(self, startid=None):
+        # Set up wire collection, either blank or with a set of entity IDs.
         if type(startid) is list:
             self.db_ids = startid
 
@@ -87,17 +97,36 @@ class WireCollection:
         if not self.db_ids:
             raise Warning('No wires found with sample ID {}'.format(sampleid))
 
-    def get(self, ID):
+    def sample(self, k=1):
+        # Get a random subset
+        if type(k) == int:
+            wid = random.choices(self.db_ids, k=1)
+            return Wire(wid[0])
+        elif type(k) == list:
+            return WireCollection(self.db_ids[k])
+        else:
+            raise TypeError('Argument to sample must be either an integer or a list of integers.')
+
+    def get(self, wid):
         # Two approaches
-        if type(ID) is int:
+        if type(wid) is int:
             # Return single wire
-            return Wire(self.db_ids[ID])
-        if type(ID) is str:
+            return Wire(self.db_ids[wid])
+        if type(wid) is str:
             # Return a measurement collection with associated entity (to backreference)
-            stm = session.query(Measurement.ID, Entity.ID).select_from(Measurement).join(Object).join(Entity).join(Experiment).filter(
-                Entity.ID.in_(self.db_ids), Experiment.type == ID)
+            stm = session.query(Measurement.ID, Entity.ID).select_from(Measurement).join(Object).join(Entity).join(
+                Experiment).filter(
+                Entity.ID.in_(self.db_ids), Experiment.type == wid)
             ret = stm.all()
             return MeasurementCollection([i[0] for i in ret], [i[1] for i in ret])
+
+    def __next__(self):
+        # To iterate
+        self.cursor = self.cursor + 1
+        return self.get(self.cursor)
+
+    def __iter__(self):
+        return self
 
 
 #################################################################
@@ -125,12 +154,15 @@ class MeasurementCollection:
         # Get a random selection of measurements
         selected = random.choices(self.db_ids, k=k)
         stm = session.query(Measurement.data).filter(Measurement.ID.in_(selected))
-        return [i[0] for i in stm.all()]
+        if k == 1:
+            return stm.first()
+        else:
+            return [i[0] for i in stm.all()]
 
     def collect(self):
         # Get all measurements
         stm = session.query(Measurement.data).filter(Measurement.ID.in_(self.db_ids))
-        return [i[0] for i in stm.all()]
+        return np.array([i[0] for i in stm.all()]).squeeze()
 
     def __next__(self):
         # To iterate
