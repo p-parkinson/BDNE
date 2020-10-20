@@ -132,7 +132,9 @@ class Measurement(decBase):
     object_ID = Column(Integer, ForeignKey('object.ID'))
     data = Column(MATLAB)
     created = Column(DateTime, default=datetime.now())
+
     object = relationship('object', back_populates='measurement')
+
 
 ############################################################################
 # Set up and connect database session
