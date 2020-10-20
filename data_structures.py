@@ -16,7 +16,6 @@ class Wire:
     """A class for a single nanowire"""
     db_id = None
     experiment_container = []
-    cache = False
 
     def __repr__(self):
         """Representation"""
@@ -107,6 +106,18 @@ class WireCollection:
         else:
             raise TypeError('Argument to sample must be either an integer or a list of integers.')
 
+    def mask(self, idset):
+        """Create a set from the intersection with other ids"""
+        if type(idset) is WireCollection:
+            idset = idset.db_ids
+        elif type(idset) is list:
+            pass
+        else:
+            raise TypeError('Mask must be passed either a list of entity IDs or another WireCollection')
+        # Create an intersection (where
+        intersection = set(self.db_ids).intersection(idset)
+        return WireCollection(list(intersection))
+
     def get(self, wid):
         # Two approaches
         if type(wid) is int:
@@ -131,6 +142,9 @@ class WireCollection:
 
 #################################################################
 #   MeasurementCollection
+#  TODO: create as_pandas() to collect as a pandas list
+#  TODO: create an "apply" function to map measurements (e.g. fit)
+#  TODO: add cacheing for repeated calls (poss. via memoization)
 #################################################################
 
 class MeasurementCollection:
@@ -163,6 +177,21 @@ class MeasurementCollection:
         # Get all measurements
         stm = session.query(Measurement.data).filter(Measurement.ID.in_(self.db_ids))
         return np.array([i[0] for i in stm.all()]).squeeze()
+
+    def mask(self, idset):
+        """Create a set from the intersection with other ids"""
+        if type(idset) is MeasurementCollection:
+            idset = idset.entity_ids
+        elif type(idset) is list:
+            pass
+        else:
+            raise TypeError('Mask must be passed either a list of entity IDs or another MeasurementCollection')
+        # Create an intersection on entity IDs
+        (intersection, id1, id2) = np.intersect1d(self.entity_ids, idset, return_indices=True)
+        # Filter measurement IDs
+        measurement_ids = [self.db_ids[i] for i in id1]
+        # Return a new filtered measurement collection
+        return MeasurementCollection(measurementids=measurement_ids, entityids=intersection)
 
     def __next__(self):
         # To iterate
