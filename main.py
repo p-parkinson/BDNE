@@ -22,10 +22,11 @@ print(wire.experiments())
 
 ##############
 # Get all wire lengths
-lengths = w.get('l')
+PL = w.get('spectra')
 # State how many obtained
-print('Obtained measurement set with {} measurements'.format(len(lengths.db_ids)))
-
+print('Obtained measurement set with {} measurements'.format(len(PL.db_ids)))
+# Add a post-process sum onto the spectra
+PL.post_process = sum
 ####################################################################
 # Plot the image and spectra
 plt.clf()
@@ -43,12 +44,14 @@ plt.ylabel('PL (arb)')
 plt.xlabel('Spectra (arb)')
 
 # Show histogram of length data
-plt.subplot(212)
-plt.hist(lengths.collect())
-yl = plt.ylim()
-plt.plot(wire.get('l')*[1,1],yl)
-plt.title('Lengths of {} wires'.format(len(w.db_ids)))
-plt.xlabel('Length (um)')
+plt.subplot(223)
+plt.hist(PL.collect(),range=(-50000,50000), bins=40)
+plt.xlabel('Intensity (um)')
+plt.ylabel('Frequency')
+plt.subplot(224)
+plt.hist(PL.collect(),100)
+plt.title('PL intensity of {} wires'.format(len(w.db_ids)))
+plt.xlabel('Intensity (um)')
 plt.ylabel('Frequency')
 
 # Update plot

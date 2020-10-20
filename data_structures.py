@@ -143,7 +143,6 @@ class WireCollection:
 #################################################################
 #   MeasurementCollection
 #  TODO: create as_pandas() to collect as a pandas list
-#  TODO: create an "apply" function to map measurements (e.g. fit)
 #  TODO: add cacheing for repeated calls (poss. via memoization)
 #################################################################
 
@@ -151,6 +150,7 @@ class MeasurementCollection:
     db_ids = []
     entity_ids = []
     cursor = -1
+    post_process = None
 
     def __init__(self, measurementids=None, entityids=None):
         if type(measurementids) is list:
@@ -176,7 +176,12 @@ class MeasurementCollection:
     def collect(self):
         # Get all measurements
         stm = session.query(Measurement.data).filter(Measurement.ID.in_(self.db_ids))
-        return np.array([i[0] for i in stm.all()]).squeeze()
+        to_ret = np.array([i[0] for i in stm.all()]).squeeze()
+        if self.post_process:
+            # A post process function exists, apply
+            return np.array([self.post_process(i) for i in to_ret])
+        else:
+            return to_ret
 
     def mask(self, idset):
         """Create a set from the intersection with other ids"""
@@ -197,7 +202,11 @@ class MeasurementCollection:
         # To iterate
         self.cursor = self.cursor + 1
         stm = session.query(Measurement.data).filter(Measurement.ID == self.db_ids[self.cursor])
-        return stm.first()
+        toret = np.array(stm.first())
+        if self.post_process:
+            return np.array(self.post_process(toret))
+        else:
+            return toret
 
     def __iter__(self):
         return self
