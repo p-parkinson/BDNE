@@ -4,6 +4,10 @@
 
 import math
 import numpy as np
+from scipy import optimize
+from scipy import signal
+import matplotlib.pyplot as plt
+
 
 # Physical Constants
 k = 8.6173324 * 1e-5
