@@ -1,6 +1,6 @@
 # PL models for semiconductor emission
 # Author  : Stephen Church <stephen.church@manchester.ac.uk>
-# Version : 0.1
+# Version : 0.2
 
 import math
 import numpy as np
@@ -22,11 +22,12 @@ mh = 0.51 * m0
 ########################################
 # Building blocks for models
 ########################################
-def gauss(x, par):
-    output = []
-    for element in x:
-        output.append(math.exp(-(element - par[0]) ** 2 / abs(par[1]) ** 2))
-    return np.array(output)
+
+#faster vectorized form of gauss
+#TODO: VECTORIZE OTHER FUNCTIONS WHERE APPROPRIATE
+def gauss(x,par):
+    output = np.exp(-(x-par[0])**2/abs(par[1])**2)
+    return output
 
 
 def dos_3d_boltz(x, par):
@@ -91,6 +92,7 @@ def lsw_3d(x, par):
 ########################################
 # PL models
 ########################################
+#TODO: SORT OF CONVOLUTION X AXIS DEFINITION
 # Arbitrary center point for gaussian, chosen to not disturb peak of PL
 def pl_3d_boltz(x, par):
     a = gauss(x, [x[0] / 9.9 + x[-1], par[0]])  # 5.95 for full wavelength range
@@ -143,3 +145,103 @@ def pl_3d_lsw(x, par):
     b = lsw_3d(x, [par[1], par[2], par[3]])
 
     return par[4] * np.convolve(a, b, 'same')
+    
+
+#class to fit spectra
+#works for example: fitter = PLfit('pl_2d_boltz')
+#                    output = fitter(s)
+#                    bounds and initial params must be set, others optional
+#                    note that number of parameters needed depends on the model selected
+class PLfit():
+    def __init__(self, model):
+        self.model = model   #model string from definitions above
+        self.bounds = []
+        self.par0 = []
+        
+        #defines the x axis of the spectrum (energy)
+        wavelength = []
+        for i in range(1044):
+            wavelength.append(346 + 0.796*i - 3.79e-5*i**2)
+        self.eV = 1239.842/np.array(wavelength)
+                
+        
+        #options for fitting
+        self.baseline_rem = 0  #remove of constant baseline
+        self.spectral_correct = 0 #correction with spectral response
+        self.clip_spectra = 0 #choose a section of the spectrum to analyse
+        self.plot_output = 1  #plot the data and fit spectrum      
+        
+        #limits and thresholds
+        self.width_thresh = 10  #will remove spectra with width less than this (cosmic rays) (in spectrum increments)
+        self.A_lim = 3 #Amplitude limit, below which ignore the spectrum        
+        self.spec_lims = [1.3,1.7]  #spectral limits for clipping (eV)
+        self.response = np.array(1044*[1])  #spectral response field, default unity unless imported
+        
+        
+        #results
+        self.output_par = []
+        self.output_PL = []   
+        self.output_res = []  #squared residuals
+    
+    #calling the class fits the spectrum
+    def __call__(self,spec):
+    
+        #function to calculate the squared residual to minimise in fit
+        def residuals(par):
+            return np.sum((eval(self.model)(self.eV,par)-data)**2)  
+
+        #slects region of interest
+        if self.clip_spectra == 1:
+            ind = np.where(np.logical_and(self.eV>=self.spec_lims[0], self.eV<=self.spec_lims[1]))
+            self.eV = self.eV[ind]
+            data = spec[ind]
+        else :
+            data = spec
+        
+        
+        #calculate and subtract constant baseline
+        if self.baseline_rem == 1:
+            #data = data - baseline_als(data,baseline_par[0],baseline_par[1])
+            data = data - (data[-1]+data[-2]+data[-3])/3
+            
+            
+        #check to see if spectrum is bright
+        if np.max(data) < self.A_lim:
+            print ('very dim sample - skipped')
+            return 
+        
+        #correct for spectral response
+        if self.spectral_correct == 1:
+            if self.clip_spectra == 1:
+                clipped_response = self.response[ind]
+                data = data*clipped_response
+            else:
+                data = data*self.response
+                
+        #normalise spectrum
+        data = data/max(data)
+    
+        #redefines upper bound to the peak of the PL
+        j = np.argmax(data)
+        upbound = self.eV[j]
+        self.bounds[1] = (1,upbound)
+        
+        #check to see if cosmic ray based on width
+        s = signal.peak_widths(data, [j], rel_height=0.5)
+        if s[0][0] < self.width_thresh:
+            print('Peak too narrow - skipped')
+            return
+    
+        #do the fitting
+        output = optimize.minimize(residuals, self.par0, method='Powell', tol=1e-7,bounds=self.bounds)            
+
+        #output the parameters
+        self.init_PL = eval(self.model)(self.eV,self.par0)
+        self.output_par = output.x
+        self.output_PL = eval(self.model)(self.eV,output.x)
+        self.output_res = output.fun
+
+        if self.plot_output == 1:
+            plt.plot(self.eV,data)
+            #plt.plot(self.eV,self.init_PL)
+            plt.plot(self.eV,self.output_PL)
