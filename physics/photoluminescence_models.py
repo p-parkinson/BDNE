@@ -27,7 +27,6 @@ mh = 0.51 * m0
 # Building blocks for models
 ########################################
 
-#faster vectorized form of gauss
 #TODO: VECTORIZE OTHER FUNCTIONS WHERE APPROPRIATE
 def gauss(x,par):
     output = np.exp(-(x-par[0])**2/abs(par[1])**2)
@@ -35,33 +34,21 @@ def gauss(x,par):
 
 
 def dos_3d_boltz(x, par):
-    output = []
-    for element in x:
-        if element < par[0]:
-            output.append(0)
-        else:
-            output.append((element - par[0]) ** 0.5 * math.exp(-(element - par[0]) / (k * par[1])))
-    return np.array(output)
+    output = np.power((x - par[0]),0.5) * np.exp(-(x-par[0])/(k*par[1]))
+    output = np.nan_to_num(output)
+    return output
 
 
 def dos_2d_boltz(x, par):
-    output = []
-    for element in x:
-        if element < par[0]:
-            output.append(0)
-        else:
-            output.append(math.exp(-(element - par[0]) / (k * par[1])))
-    return np.array(output)
+    output = np.exp(-(x-par[0])/(k*par[1]))
+    output = np.where(output>1,0,output)
+    return output
 
 
 def urbach(x, par):
-    output = []
-    for element in x:
-        if element > par[0]:
-            output.append(0)
-        else:
-            output.append(math.exp((element - par[0]) / (par[1])))
-    return np.array(output)
+    output = np.exp((x-par[0])/(par[1]))
+    output = np.where(output>1,0,output)
+    return output
 
 
 # E0, T, EF
