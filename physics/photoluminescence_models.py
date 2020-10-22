@@ -53,32 +53,20 @@ def urbach(x, par):
 
 # E0, T, EF
 def lsw_2d(x, par):
-    output = []
-    for element in x:
-        if element > par[0]:
-            num = (element - par[0]) ** 2 * (1 - 0.5) * (
-                        1 - 2 / (math.exp((element - par[2]) / (k * par[1])) ** 0.5 + 1))
-        else:
-            num = 0
-
-        den = 1 / (math.exp((element - par[2]) / (k * par[1])) - 1)
-        output.append(num * den)
-    return np.array(output)
+    num = 0.5* np.multiply(np.power((x-par[0]),2),(1-np.divide(2,(np.exp((x-par[2])/(k*par[1]))**0.5+1))))
+    den = (np.exp((x-par[2])/(k*par[1]))-1)
+    output = np.divide(num,den)    
+    output = np.where(x < par[0],0,output)
+    return np.array(output) 
 
 
 # E0, T, EF
 def lsw_3d(x, par):
-    output = []
-    for element in x:
-        if element > par[0]:
-            num = (element - par[0]) ** 2 * (1 - math.exp(-(element - par[0]))) * (
-                        1 - 2 / (math.exp((element - par[2]) / (k * par[1])) ** 0.5 + 1))
-        else:
-            num = 0
-
-        den = 1 / (math.exp((element - par[2]) / (k * par[1])) - 1)
-        output.append(num * den)
-    return np.array(output)
+    num = np.multiply((1-np.exp(-(x-par[0]))), np.multiply(np.power((x-par[0]),2),(1-np.divide(2,(np.exp((x-par[2])/(k*par[1]))**0.5+1)))))
+    den = (np.exp((x-par[2])/(k*par[1]))-1)
+    output = np.divide(num,den)    
+    output = np.where(x < par[0],0,output)   
+    return output  
 
 ########################################
 # PL models
