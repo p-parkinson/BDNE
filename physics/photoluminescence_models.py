@@ -71,19 +71,17 @@ def lsw_3d(x, par):
 ########################################
 # PL models
 ########################################
-#TODO: SORT OF CONVOLUTION X AXIS DEFINITION
-# Arbitrary center point for gaussian, chosen to not disturb peak of PL
+
 def pl_3d_boltz(x, par):
-    a = gauss(x, [x[0] / 9.9 + x[-1], par[0]])  # 5.95 for full wavelength range
+    a = gauss(x, [(x[0]+x[-1])/2, par[0]])  # 5.95 for full wavelength range
     # plt.plot(x,a/max(a))
     b = dos_3d_boltz(x, [par[1], par[2]])
     # plt.plot(x,b/max(b))
     return par[3] * np.convolve(a, b, 'same')
 
 
-# Arbitrary center point for gaussian, chosen to not disturb peak of PL
 def pl_2d_boltz(x, par):
-    a = gauss(x, [x[0] / 9.9 + x[-1], par[0]])
+    a = gauss(x, [(x[0]+x[-1])/2, par[0]])
     # plt.plot(x,a/max(a))
     b = dos_2d_boltz(x, [par[1], par[2]])
     # plt.plot(x,b/max(b))
@@ -91,7 +89,7 @@ def pl_2d_boltz(x, par):
 
 
 def pl_2d_urbach(x, par):
-    a = gauss(x, [x[0] / 9.9 + x[-1], par[0]])
+    a = gauss(x, [(x[0]+x[-1])/2, par[0]])
     urb = urbach(x, [par[1], par[4]])
     b = dos_2d_boltz(x, [par[1], par[2]])
 
@@ -103,7 +101,7 @@ def pl_2d_urbach(x, par):
 
 # TODO: ISSUE WITH JOINING OF TWO SIDES OF MODEL
 def pl_3d_urbach(x, par):
-    a = gauss(x, [x[0] / 9.9 + x[-1], par[0]])
+    a = gauss(x, [(x[0]+x[-1])/2, par[0]])
     urb = urbach(x, [par[1], par[4]])
     b = dos_3d_boltz(x, [par[1], par[2]])
     c = urb / max(urb) + b / max(b)
@@ -113,14 +111,14 @@ def pl_3d_urbach(x, par):
 
 
 def pl_2d_lsw(x, par):
-    a = gauss(x, [x[0] / 9.9 + x[-1], par[0]])
+    a = gauss(x, [(x[0]+x[-1])/2, par[0]])
     b = lsw_2d(x, [par[1], par[2], par[3]])
 
     return par[4] * np.convolve(a, b, 'same')
 
 
 def pl_3d_lsw(x, par):
-    a = gauss(x, [x[0] / 9.9 + x[-1], par[0]])
+    a = gauss(x, [(x[0]+x[-1])/2, par[0]])
     b = lsw_3d(x, [par[1], par[2], par[3]])
 
     return par[4] * np.convolve(a, b, 'same')
