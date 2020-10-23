@@ -175,17 +175,37 @@ class MeasurementCollection:
 
     def sample(self, k=1):
         # Get a random selection of measurements
-        selected = random.choices(self.db_ids, k=k)
-        stm = session.query(Measurement.data).filter(Measurement.ID.in_(selected))
-        if k == 1:
-            return stm.first()
+        selected = random.choices(range(len(self.db_ids)), k=k)
+        stm = self._get(selected)
+
+    def _get(self, n):
+        # Convert ranges
+        if type(n) is range:
+            n = list(n)
+        # Check if a list passed (must be)
+        if type(n) is not list:
+            raise NotImplementedError('n must be a list')
+        # Convert to numpy
+        n = np.array(n)
+        # Range check
+        if np.any(n > len(self.db_ids)) or np.any(n < 0):
+            raise KeyError('Index must be in range 0 to {}'.format(len(self.db_ids)))
+        # Convert indices to db_ids
+        to_get = [self.db_ids[i] for i in n]
+        # Three methods - single, zero length, multiple
+        if len(to_get) == 1:
+            stm = session.query(Measurement.data).filter(Measurement.ID == to_get[0])
+            to_return = np.array(stm.first()[0]).squeeze()
+        elif len(to_get) == 0:
+            to_return = None
         else:
-            return [i[0] for i in stm.all()]
+            stm = session.query(Measurement.data).filter(Measurement.ID.in_(to_get))
+            to_return = np.array([i[0] for i in stm.all()]).squeeze()
+        return to_return
 
     def collect(self):
         # Get all measurements
-        stm = session.query(Measurement.data).filter(Measurement.ID.in_(self.db_ids))
-        to_ret = np.array([i[0] for i in stm.all()]).squeeze()
+        to_ret = self._get(range(len(self.db_ids)))
         if self.post_process:
             # A post process function exists, apply
             return np.array([self.post_process(i) for i in to_ret])
@@ -213,8 +233,7 @@ class MeasurementCollection:
         if self.cursor == len(self.db_ids):
             self.cursor = 0
             raise StopIteration()
-        stm = session.query(Measurement.data).filter(Measurement.ID == self.db_ids[self.cursor])
-        toret = np.array(stm.first())
+        toret = self._get([self.cursor])
         if self.post_process:
             return np.array(self.post_process(toret))
         else:
