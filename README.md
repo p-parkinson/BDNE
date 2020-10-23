@@ -41,7 +41,8 @@ These should be used for handling data and processing, and connect into the ```d
 
 Example code is provided in ```main.py```. The containers WireCollection and MeasurementCollection are iterable:
 ```python
-import data_structures
+
+from BDNE import data_structures
 wc = data_structures.WireCollection()
 wc.loadsample(25)
 for wire in wc:

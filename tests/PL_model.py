@@ -5,9 +5,8 @@
 
 import time
 
-from photoluminescence_models import *
-
-import data_structures
+from BDNE.physics.photoluminescence_models import *
+from BDNE import data_structures
 
 w = data_structures.WireCollection()
 # Populate from the database, sample ID 25

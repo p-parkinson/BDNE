@@ -19,7 +19,7 @@ from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import Session, relationship
 
 # Matlab serialise for numpy->matlab and matlab->numpy conversion
-from matlab_serialise import serialise, deserialise
+from BDNE.matlab_serialise import serialise, deserialise
 
 # Get current path (required for locating config.ini)
 package_directory = os.path.dirname(os.path.abspath(__file__))

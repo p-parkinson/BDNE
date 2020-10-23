@@ -8,7 +8,7 @@ import random
 import numpy as np
 
 # Import for database
-from db_orm import *
+from BDNE.db_orm import *
 
 
 #################################################################

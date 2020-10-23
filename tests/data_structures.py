@@ -3,7 +3,7 @@
 
 import matplotlib.pyplot as plt
 
-import data_structures
+from BDNE import data_structures
 
 ####################################################################
 # Set up a wire collection
