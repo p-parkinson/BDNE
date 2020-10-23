@@ -1,94 +1,73 @@
 # Test code for PL model fitting
 # Examples of how to implement the fitter
 # Author  : Stephen Church <stephen.church@manchester.ac.uk>
-# Version : 0.1
+# Version : 0.2
 
 import time
 
 from BDNE.physics.photoluminescence_models import *
 from BDNE import data_structures
 
+# Create a Wire collection
 w = data_structures.WireCollection()
 # Populate from the database, sample ID 25
 w.loadsample(25)
 # List how many wires samples
 print('Wire Collection has {} wires'.format(len(w.db_ids)))
 
-# Get one wire to test at random
-wire = w.sample(1)
-# State which one sampled
-print('Selected wire ID {}'.format(wire.db_id))
-
-# Get spectrum
-PL = wire.get('spectra')
-
 ##############################################################
-
 # initialising the fitter
+##############################################################
 
 # create a PL fitter with a defined model
 fitter = PLfit(pl_3d_boltz)
 # REQUIRED: define initial conditions for the model [sigma, E0, T, A]
-fitter.par0 = [0.05, 1.5, 300, 1]
-# RERUIRED: define bounds for the model [sigma, E0, T, A]
-fitter.bounds = [(0.01, 0.1), (1, 3), (300, 300), (0, None)]
+fitter.par0 = [0.03, 2.38, 300, 1]
+# REQUIRED: define bounds for the model [sigma, E0, T, A]
+fitter.bounds = [(0.005, 0.1), (2.1, 2.5), (300, 500), (0, 2)]
 
-####################################
-
-# OPTIONAL parameters to initialise:
-fitter.spectral_correct = False
-
-# clip the spectra
-fitter.clip_spectra = False
-fitter.spec_lims = [1.3, 1.7]
-
-# plot the results
-fitter.plot_output = 0
-
-# set width and amplitude thresholds to remove cosmic rays and bad spectra
-fitter.width_thresh = 10
+# Optional:
+fitter.clip_spectra = True
+fitter.spec_lims = [1.75, 3]
 fitter.A_lim = 3
-
-##################################################
-
-# single use of the fitter
-
-# fit the spectrum
-fitter(PL)
-
-# fitting parameters
-print(fitter.output_par)
-print(fitter.output_res)
-
-# fit spectrum
-# print(fitter.output_PL)
+fitter.plot_output = False
 
 ###############################################################
-
 # Iterating using the fitter
-n_spec = 30
-start = time.time()
+###############################################################
+# Number of spectra to study
+n_spec = 300
 print('Begin fitting loop')
-par = []
-dy_res = 0
-for i in range(n_spec):
-    wire = w.sample(1)
-    print('Selected wire ID {}'.format(wire.db_id))
-    PL = wire.get('spectra')
+par = np.zeros((n_spec,len(fitter.par0)))
+i, dy_res = 0, 0
+# Select a subset of wires for demonstration
+sample = w.sample(n_spec)
+# Collect spectral data (avoid repeated DB hits)
+data = sample.get('spectra').collect()
+# Iterate and fit
+start = time.time()
+for (wire, PL) in zip(sample, data):
+    print('{} : wire ID {}'.format(i, wire.db_id))
     fitter(PL)
-
-    output = [wire.db_id, fitter.output_par, fitter.output_res]
-    par.append(output)
-
-    # use dynamic initial conditions, recommended to speed up loop
-    # initial parameter is average of fit results
-    dy_res += fitter.output_par
-    fitter.par0 = dy_res / (i + 1)
+    par[i, :] = fitter.output_par
 
     # estimate the time remaining
-    if i % 10 == 0:
-        elapsed = time.time()
-        print('Elapsed time: ' + str(round(elapsed - start)) + 's, estimated time remaining: ' + str(
-            round((n_spec - i - 1) * (elapsed - start) / (i + 1))) + ' s')
+    i = i + 1
+    if not (i % 10):
+        elapsed = time.time() - start
+        print('Elapsed time: {}s, ETA : {}s ({}s/w)'.format(elapsed, round((n_spec - i - 1) * elapsed / (i + 1)),elapsed/i))
 
-del dy_res, output, elapsed, start
+# Cut par down to size, removing blank sets
+par = par[0:(i-1), :]
+
+###############################################################
+# Show results
+###############################################################
+
+labels = ['sigma', 'E_g', 'T', 'A']
+plt.clf()
+for i in range(4):
+    plt.subplot(2, 2, i + 1)
+    plt.hist(par[:, i],round(n_spec/10))
+    plt.xlabel(labels[i])
+plt.show()

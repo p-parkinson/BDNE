@@ -32,7 +32,7 @@ def gauss(x, par):
 
 def dos_3d_boltz(x, par):
     output = np.power(np.fmax((x - par[0]), 0), 0.5) * np.exp(-(x - par[0]) / (boltzmann_kb * par[1]))
-    output = np.nan_to_num(output)
+    output = np.where(x>par[0], output, 0)
     return output
 
 
@@ -141,7 +141,7 @@ class PLfit():
         # limits and thresholds
         self.width_thresh = 10  # will remove spectra with width less than this (cosmic rays) (in spectrum increments)
         self.A_lim = 3  # Amplitude limit, below which ignore the spectrum
-        self.spec_lims = [1.3, 1.7]  # spectral limits for clipping (eV)
+        self.spec_lims = [np.min(self.eV), np.max(self.eV)]  # spectral limits for clipping (eV)
         self.response = np.array(1044 * [1])  # spectral response field, default unity unless imported
 
         # results
@@ -154,11 +154,12 @@ class PLfit():
 
         if self.clip_spectra:
             ind = np.where(np.logical_and(self.eV >= self.spec_lims[0], self.eV <= self.spec_lims[1]))
-            self.eV = self.eV[ind]
+            eV = self.eV[ind]
             data = spec[ind]
         else:
             ind = np.ones(self.eV.shape)
             data = spec
+            eV = self.eV
 
         # calculate and subtract constant baseline
         if self.remove_baseline:
@@ -181,31 +182,23 @@ class PLfit():
         if self.normalise_spectrum:
             data = data / max(data)
 
-        # redefines upper bound to the peak of the PL [PP - removed]
-        #upbound = self.eV[np.argmax(data)]
-        #self.bounds[1] = (1, upbound)
-
-        # check to see if cosmic ray based on width [PP - removed]
-        #s = signal.peak_widths(data, [j], rel_height=0.5)
-        #if s[0][0] < self.width_thresh:
-        #    print('Peak too narrow - skipped')
-        #    return
-
         # function to calculate the squared residual to minimise in fit
         def residuals(par):
-            return np.sum((self.model(self.eV, par) - data) ** 2)
+            return np.sum((self.model(eV, par) - data) ** 2)
 
         # do the fitting
-        output = optimize.minimize(residuals, np.array(self.par0), method='Powell', tol=1e-7, bounds=self.bounds)
+        output = optimize.minimize(residuals, np.array(self.par0), method='Powell', tol=1e-9, bounds=self.bounds)
 
         # output the parameters
-        self.init_PL = self.model(self.eV, self.par0)
+        self.init_PL = self.model(eV, self.par0)
         self.output_par = output.x
         self.output_PL = self.model(self.eV, output.x)
         self.output_res = output.fun
 
         # Show the fit if required
         if self.plot_output == 1:
-            plt.plot(self.eV, data)
+            plt.plot(eV, data)
             plt.plot(self.eV, self.output_PL)
+            plt.xlabel('Energy (eV)')
+            plt.ylabel('PL intensity')
             plt.show()
