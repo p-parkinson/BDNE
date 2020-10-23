@@ -104,7 +104,7 @@ class WireCollection:
         if type(k) == int:
             wid = random.choices(self.db_ids, k=k)
             if len(wid) == 1:
-                return Wire(wid)
+                return Wire(wid[0])
             else:
                 return WireCollection(wid)
         elif type(k) == list:
