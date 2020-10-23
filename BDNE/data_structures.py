@@ -102,8 +102,11 @@ class WireCollection:
     def sample(self, k=1):
         # Get a random subset
         if type(k) == int:
-            wid = random.choices(self.db_ids, k=1)
-            return Wire(wid[0])
+            wid = random.choices(self.db_ids, k=k)
+            if len(wid) == 1:
+                return Wire(wid)
+            else:
+                return WireCollection(wid)
         elif type(k) == list:
             return WireCollection(self.db_ids[k])
         else:
@@ -137,6 +140,9 @@ class WireCollection:
     def __next__(self):
         # To iterate
         self.cursor = self.cursor + 1
+        if self.cursor == len(self.db_ids):
+            self.cursor = 0
+            raise StopIteration()
         return self.get(self.cursor)
 
     def __iter__(self):
@@ -204,6 +210,9 @@ class MeasurementCollection:
     def __next__(self):
         # To iterate
         self.cursor = self.cursor + 1
+        if self.cursor == len(self.db_ids):
+            self.cursor = 0
+            raise StopIteration()
         stm = session.query(Measurement.data).filter(Measurement.ID == self.db_ids[self.cursor])
         toret = np.array(stm.first())
         if self.post_process:
