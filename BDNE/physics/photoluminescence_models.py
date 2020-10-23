@@ -12,7 +12,6 @@ planck_constant = 1.054571 * 1e-34
 electron_mass = 9.10938356 * 1e-31
 
 # GaAs constants
-# TODO: Implement for different materials
 material_constants = {'GaAs': {}}
 material_constants['GaAs']['E'] = 1.424
 material_constants['GaAs']['mqe'] = 0.063 * electron_mass
@@ -71,7 +70,7 @@ def lsw_3d(x, par):
 ########################################
 # PL models
 ########################################
-
+# TODO: Gaussian only requires a single parameter - width. Need to change throughout
 def pl_3d_boltz(x, par):
     a = gauss(x, [(x[0] + x[-1]) / 2, par[0]])  # 5.95 for full wavelength range
     b = dos_3d_boltz(x, [par[1], par[2]])
@@ -121,6 +120,11 @@ def pl_3d_lsw(x, par):
 #                    note that number of parameters needed depends on the model selected
 #######################################################
 class PLfit():
+
+    def __repr__(self):
+        return "PL fitting class, using ({}) model with [{}] starting parameters".format(
+            self.model.__name__, self.par0)
+
     def __init__(self, model):
         self.model = model  # model string from definitions above
         self.bounds = []
@@ -202,3 +206,5 @@ class PLfit():
             plt.xlabel('Energy (eV)')
             plt.ylabel('PL intensity')
             plt.show()
+
+        return output.x

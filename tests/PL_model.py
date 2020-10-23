@@ -48,8 +48,7 @@ data = sample.get('spectra').collect()
 start = time.time()
 for (wire, PL) in zip(sample, data):
     print('{} : wire ID {}'.format(i, wire.db_id))
-    fitter(PL)
-    par[i, :] = fitter.output_par
+    par[i, :] = fitter(PL)
 
     # estimate the time remaining
     i = i + 1
@@ -68,6 +67,6 @@ labels = ['sigma', 'E_g', 'T', 'A']
 plt.clf()
 for i in range(4):
     plt.subplot(2, 2, i + 1)
-    plt.hist(par[:, i],round(n_spec/10))
+    plt.hist(par[:, i], round(n_spec/10))
     plt.xlabel(labels[i])
 plt.show()
