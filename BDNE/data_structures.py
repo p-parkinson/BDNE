@@ -9,6 +9,7 @@ import numpy as np
 
 # Import for database
 from BDNE.db_orm import *
+from BDNE import session
 
 
 #################################################################
