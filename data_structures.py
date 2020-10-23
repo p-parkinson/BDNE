@@ -1,12 +1,14 @@
 # Definition of data structures for BDNE project
 # Author : Patrick Parkinson <patrick.parkinson@manchester.ac.uk>
 
-# Import for database
-from db_orm import *
 # For sampling from set
 import random
+
 # For conversion
 import numpy as np
+
+# Import for database
+from db_orm import *
 
 
 #################################################################

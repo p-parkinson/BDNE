@@ -2,6 +2,7 @@
 # Author : Patrick Parkinson <patrick.parkinson@manchester.ac.uk>
 
 import matplotlib.pyplot as plt
+
 import data_structures
 
 ####################################################################

@@ -1,11 +1,6 @@
 # SQLAlchemy-based ORM model for the BDNE project
 # Author : Patrick Parkinson <patrick.parkinson@manchester.ac.uk>
 
-# SQLAlchemy used for database connection
-from sqlalchemy.orm import Session, relationship
-from sqlalchemy import create_engine, Integer, ForeignKey, Text, String, Column, DateTime
-from sqlalchemy.ext.declarative import declarative_base
-import sqlalchemy.types as types
 # Configparser used for configuration settings
 import configparser
 # OS used for configuration settings
@@ -14,10 +9,17 @@ import os
 import zlib
 # Datetime for column definitions
 from datetime import datetime
-# Matlab serialise for numpy->matlab and matlab->numpy conversion
-from matlab_serialise import serialise, deserialise
+
+import sqlalchemy.types as types
 # Numpy for handling numeric data
 from numpy import ndarray
+from sqlalchemy import create_engine, Integer, ForeignKey, Text, String, Column, DateTime
+from sqlalchemy.ext.declarative import declarative_base
+# SQLAlchemy used for database connection
+from sqlalchemy.orm import Session, relationship
+
+# Matlab serialise for numpy->matlab and matlab->numpy conversion
+from matlab_serialise import serialise, deserialise
 
 # Get current path (required for locating config.ini)
 package_directory = os.path.dirname(os.path.abspath(__file__))

@@ -2,10 +2,10 @@
 # Author  : Stephen Church <stephen.church@manchester.ac.uk>
 # Version : 0.2
 
+import matplotlib.pyplot as plt
 import numpy as np
 from scipy import optimize
 from scipy import signal
-import matplotlib.pyplot as plt
 
 # Physical Constants
 boltzmann_kb = 8.6173324 * 1e-5
