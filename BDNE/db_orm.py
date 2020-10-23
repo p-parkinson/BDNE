@@ -1,10 +1,6 @@
 # SQLAlchemy-based ORM model for the BDNE project
 # Author : Patrick Parkinson <patrick.parkinson@manchester.ac.uk>
 
-# Configparser used for configuration settings
-import configparser
-# OS used for configuration settings
-import os
 # Zlib used for compression for data
 import zlib
 # Datetime for column definitions
@@ -13,27 +9,27 @@ from datetime import datetime
 import sqlalchemy.types as types
 # Numpy for handling numeric data
 from numpy import ndarray
-from sqlalchemy import create_engine, Integer, ForeignKey, Text, String, Column, DateTime
+from sqlalchemy import Integer, ForeignKey, Text, String, Column, DateTime
 from sqlalchemy.ext.declarative import declarative_base
 # SQLAlchemy used for database connection
-from sqlalchemy.orm import Session, relationship
+from sqlalchemy.orm import relationship
+# Create connection to database
+from sqlalchemy.orm import Session
+from sqlalchemy import create_engine
 
 # Matlab serialise for numpy->matlab and matlab->numpy conversion
 from BDNE.matlab_serialise import serialise, deserialise
 
-# Get current path (required for locating config.ini)
-package_directory = os.path.dirname(os.path.abspath(__file__))
-
-# Read and import configuration from config file
-config = configparser.ConfigParser()
-config.read(os.path.join(package_directory, 'config.ini'))
-
 # Create base autoloader
 decBase = declarative_base()
-# Connect to the database using credentials from config.ini
-engine = create_engine('mysql+mysqlconnector://%s:%s@%s:%s/bdne' % (
-    config.get('DATABASE', 'user'), config.get('DATABASE', 'pass'),
-    config.get('DATABASE', 'server'), config.get('DATABASE', 'port')))
+
+
+############################################################################
+# Custom class for data in database
+############################################################################
+def connect(server: str, port: str, user: str, password: str) -> Session:
+    engine = create_engine('mysql+mysqlconnector://%s:%s@%s:%s/bdne' % (user, password, server, port))
+    return Session(engine)
 
 
 ############################################################################
@@ -136,9 +132,3 @@ class Measurement(decBase):
     created = Column(DateTime, default=datetime.now())
 
     object = relationship('object', back_populates='measurement')
-
-
-############################################################################
-# Set up and connect database session
-############################################################################
-session = Session(engine)
