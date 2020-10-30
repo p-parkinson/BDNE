@@ -241,3 +241,52 @@ class MeasurementCollection:
 
     def __iter__(self):
         return self
+
+
+#################################################################
+#   PostProcess
+#################################################################
+
+class PostProcess:
+    mc = None
+    func = None
+    _cursor = 0
+
+    def __init__(self, mc=None):
+        if type(mc) is MeasurementCollection:
+            self.mc = mc
+
+    def __repr__(self):
+        """Representation"""
+        if self.func:
+            fname = self.func.__name__
+        else:
+            fname = 'None'
+        if self.mc:
+            mcname = repr(self.mc)
+        else:
+            mcname = 'None'
+        return "Postprocessing function [{}] attached to {}".format(fname, mcname)
+
+    def set_function(self, func):
+        self.func = func
+
+    def set_data(self, mc):
+        self.mc = mc
+
+    def __next__(self):
+        # To iterate
+        self._cursor = self._cursor + 1
+        if self._cursor == len(self.mc.db_ids):
+            self._cursor = 0
+            raise StopIteration()
+        toret = self.mc._get([self._cursor])
+        return np.array(self.func(toret))
+
+    def __iter__(self):
+        return self
+
+    def collect(self):
+        # Get all measurements
+        to_ret = self.mc._get(range(len(self.mc.db_ids)))
+        return np.array([self.func(i) for i in to_ret])

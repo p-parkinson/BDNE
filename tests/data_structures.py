@@ -2,7 +2,7 @@
 # Author : Patrick Parkinson <patrick.parkinson@manchester.ac.uk>
 
 import matplotlib.pyplot as plt
-
+import numpy as np
 from BDNE import data_structures
 
 ####################################################################
@@ -23,11 +23,12 @@ print(wire.experiments())
 
 ##############
 # Get all wire lengths
-PL = w.get('spectra')
+spectra = w.get('spectra')
 # State how many obtained
-print('Obtained measurement set with {} measurements'.format(len(PL.db_ids)))
+print('Obtained measurement set with {} measurements'.format(len(spectra.db_ids)))
 # Add a post-process sum onto the spectra
-PL.post_process = sum
+PL = data_structures.PostProcess(spectra)
+PL.set_function(np.sum)
 ####################################################################
 # Plot the image and spectra
 plt.clf()
