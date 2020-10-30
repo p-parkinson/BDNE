@@ -28,7 +28,9 @@ spectra = w.get('spectra')
 print('Obtained measurement set with {} measurements'.format(len(spectra.db_ids)))
 # Add a post-process sum onto the spectra
 PL = data_structures.PostProcess(spectra)
+pkpos = data_structures.PostProcess(spectra)
 PL.set_function(np.sum)
+pkpos.set_function(np.argmax)
 ####################################################################
 # Plot the image and spectra
 plt.clf()

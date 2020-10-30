@@ -7,6 +7,9 @@ import random
 # For conversion
 import numpy as np
 
+# For cacheing
+from cachetools import cached
+
 # Import for database
 from BDNE.db_orm import *
 from BDNE import session
@@ -152,7 +155,7 @@ class WireCollection:
 #################################################################
 #   MeasurementCollection
 #  TODO: create as_pandas() to collect as a pandas list
-#  TODO: add cacheing for repeated calls (poss. via memoization)
+#  TODO: Create "clever" memoization, for each id.
 #################################################################
 
 class MeasurementCollection:
@@ -178,6 +181,7 @@ class MeasurementCollection:
         selected = random.choices(range(len(self.db_ids)), k=k)
         stm = self._get(selected)
 
+    @cached(cache={})
     def _get(self, n):
         # Convert ranges
         if type(n) is range:

@@ -1,5 +1,6 @@
-scipy
-pandas
-matplotlib
-numpy
-sqlalchemy
+scipy~=1.5.2
+matplotlib~=3.2.2
+numpy~=1.18.1
+sqlalchemy~=1.3.17
+zlib~=1.2.11
+cachetools~=4.1.1
