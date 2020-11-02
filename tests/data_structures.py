@@ -8,8 +8,8 @@ from BDNE import data_structures
 ####################################################################
 # Set up a wire collection
 w = data_structures.WireCollection()
-# Populate from the database, sample ID 25
-w.loadsample(25)
+# Populate from the database, EntityGroup 3
+w.load_entitygroup(3)
 # List how many wires samples
 print('Wire Collection has {} wires'.format(len(w.db_ids)))
 
@@ -49,11 +49,11 @@ plt.xlabel('Spectra (arb)')
 
 # Show histogram of length data
 plt.subplot(223)
-plt.hist(PL.collect(),range=(-50000,50000), bins=40)
-plt.xlabel('Intensity (um)')
+plt.hist(pkpos.collect(), 100)
+plt.xlabel('PL peak position')
 plt.ylabel('Frequency')
 plt.subplot(224)
-plt.hist(PL.collect(),100)
+plt.hist(PL.collect(), 100)
 plt.title('PL intensity of {} wires'.format(len(w.db_ids)))
 plt.xlabel('Intensity (um)')
 plt.ylabel('Frequency')
