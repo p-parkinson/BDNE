@@ -96,11 +96,18 @@ class WireCollection:
         if type(startid) is list:
             self.db_ids = startid
 
-    def loadsample(self, sampleid):
+    def load_sample(self, sampleid):
         stm = session.query(Entity.ID).filter(Entity.sampleID == sampleid)
         self.db_ids = [i[0] for i in stm.all()]
         if not self.db_ids:
             raise Warning('No wires found with sample ID {}'.format(sampleid))
+
+    def load_entitygroup(self, entityGroupid):
+        # TODO: implement entitygroup loading
+        stm = session.query(EntityGroup_Entity.entityID).filter(EntityGroup.ID == entityGroupid)
+        self.db_ids = [i[0] for i in stm.all()]
+        if not self.db_ids:
+            raise Warning('No wires found with sample ID {}'.format(entityGroupid))
 
     def sample(self, k=1):
         # Get a random subset

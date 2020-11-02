@@ -98,6 +98,7 @@ class Entity(decBase):
 
     objects = relationship('Object', back_populates='entity')
     sample = relationship('Sample', back_populates='entities')
+    entityGroup = relationship('EntityGroup_Entities', back_populates='entities')
 
 
 class Sample(decBase):
@@ -132,3 +133,26 @@ class Measurement(decBase):
     created = Column(DateTime, default=datetime.now())
 
     object = relationship('object', back_populates='measurement')
+
+
+class EntityGroup(decBase):
+    __tablename__ = 'entityGroup'
+
+    ID = Column(Integer, primary_key=True)
+    name = Column(String)
+    details = Column(String)
+    owner = Column(String)
+    created = Column(DateTime)
+    last_access = Column(DateTime)
+
+    entities = relationship('EntityGroup_entity', back_populates='entityGroup')
+
+
+class EntityGroup_Entity(decBase):
+    __tablename__ = 'entityGroup_entity'
+
+    entityGroupID = Column(Integer, ForeignKey('entityGroup.ID'), primary_key=True)
+    entityID = Column(Integer, ForeignKey('entity.ID'), primary_key=True)
+
+    entityGroup = relationship('EntityGroup', back_populates='entities')
+    entities = relationship('Entity', back_populates='entityGroup')
