@@ -211,7 +211,7 @@ class MeasurementCollection:
             to_return = None
         else:
             stm = session.query(Measurement.data).filter(Measurement.ID.in_(to_get))
-            to_return = np.array([i[0] for i in stm.all()]).squeeze()
+            to_return = [np.array(i[0]).squeeze() for i in stm.all()]
         return to_return
 
     def collect(self):
