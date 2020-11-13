@@ -11,7 +11,7 @@ classes = [np.double, np.single, np.int8, np.uint8, np.int16, np.uint16, np.int3
 sizes = [8, 4, 1, 1, 2, 2, 4, 4, 8, 8]
 
 
-def deserialise(value: bytes) -> np.ndarray:
+def deserialise(value: bytes, return_pos: bool = False):
     """Deserialise bytes to numpy array
 
     This function is complementary to the hlp_deserialise.m function available in MATLAB, which is described at
@@ -19,10 +19,12 @@ def deserialise(value: bytes) -> np.ndarray:
 
     It takes a byte string in a specific format and returns a numpy array with appropriate data type.
     Only a subset of types are implemented. """
+    pos = 0
     if value[0] in range(1, 11):
         # Interpret as a scalar
         sz = sizes[value[0] - 1]
         dt = np.frombuffer(value[1:(1 + sz)], classes[value[0] - 1])
+        pos = 1 + sz
     elif value[0] in range(17, 26):
         # Interpret as a simple numeric array
         sz = sizes[value[0] - 17]
@@ -32,12 +34,54 @@ def deserialise(value: bytes) -> np.ndarray:
         nbytes = sz * np.prod(dims)
         dt = np.frombuffer(value[pos:(pos + nbytes)], classes[value[0] - 17])
         dt = np.squeeze(np.reshape(dt, dims[::-1]))
+        pos += nbytes
+    elif value[0] == 128:
+        # Interpret as a struct array
+        nfields = np.frombuffer(value[1:5], dtype='uint32', count=1)[0]
+        fnLengths = np.frombuffer(value[5:(5 + nfields * 4)], dtype='uint32', count=nfields)
+        pos = (5 + nfields * 4)
+        fnchars = value[pos:pos + sum(fnLengths)]
+        pos += sum(fnLengths)
+        ndms = np.frombuffer(value[pos:pos + sum(fnLengths) + 4], dtype='uint32', count=1)[0]
+        pos += 4
+        dms = np.frombuffer(value[pos:pos + ndms * 4], 'uint32')
+        pos += ndms * 4
+        fieldnames = (fnchars[i[0]:i[1]].decode("utf-8") for i in np.transpose(
+            [np.cumsum(np.insert(fnLengths, 0, 0))[:-1], np.cumsum(np.insert(fnLengths, 0, 0))[1:]]))
+        if value[pos]:
+            # Via cell
+            dt, p = deserialise(value[pos + 1:], return_pos=True)
+            pos += p
+            dt = {i: j for (i, j) in zip(fieldnames, dt)}
+        else:
+            # Otherwise
+            # TODO: Implement Cell
+            raise NotImplementedError('Other struct type not implemented')
+    elif value[0] in range(33, 39):
+        # Is a MATLAB cell
+        kind = value[0]
+        if kind == 33:
+            # Arbitrary cell array
+            ndms = value[1]
+            # Dimension
+            dms = np.frombuffer(value[2:2 + ndms * 4], dtype='uint32', count=ndms)
+            pos_initial = 2 + ndms * 4
+            dt = tuple()
+            for i in range(np.product(dms)):
+                d, pos = deserialise(value[pos_initial:], return_pos=True)
+                pos_initial += pos
+                dt += (d,)
+        else:
+            raise NotImplementedError('Other cell types not implemented')
     else:
         # unknown
-        # TODO: Implement other types. Structures, strings etc.
-        dt = None
-        print('Unknown class %d' % np.uint8(value[0]))
-    return dt
+        # TODO: Implement other types. strings etc.
+        dt = value
+        raise NotImplementedError('Type {} not implemented'.format(np.uint8(value[0])))
+    if return_pos:
+        return dt, pos
+    else:
+        return dt
 
 
 def serialise(value: np.ndarray) -> bytes:
