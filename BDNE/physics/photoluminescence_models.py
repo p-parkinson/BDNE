@@ -141,6 +141,8 @@ class PLfit():
         self.clip_spectra = False  # choose a section of the spectrum to analyse
         self.normalise_spectrum = True
         self.plot_output = True  # plot the data and fit spectrum
+        self.ftol = 1e-4  # Settings for optimizer
+        self.tol = 1e-9  # Settings for optimizer
 
         # limits and thresholds
         self.width_thresh = 10  # will remove spectra with width less than this (cosmic rays) (in spectrum increments)
@@ -191,13 +193,14 @@ class PLfit():
             return np.sum((self.model(eV, par) - data) ** 2)
 
         # do the fitting
-        output = optimize.minimize(residuals, np.array(self.par0), method='Powell', tol=1e-9, bounds=self.bounds)
-
+            # do the fitting
+        output = optimize.minimize(residuals, np.array(self.par0),
+                                   method='Powell', tol=self.tol,
+                                   options={'ftol': self.ftol}, bounds=self.bounds)
         # output the parameters
         self.init_PL = self.model(eV, self.par0)
-        self.output_par = output.x
+        self.output = output
         self.output_PL = self.model(self.eV, output.x)
-        self.output_res = output.fun
 
         # Show the fit if required
         if self.plot_output == 1:
