@@ -107,7 +107,7 @@ class WireCollection:
     def load_entity_group(self, entity_group_id: int):
         """Load an entityGroup ID into the WireCollection class"""
         # TODO: implement entity_group loading
-        stm = session.query(EntityGroup_Entity.entityID).filter(EntityGroup.ID == entity_group_id)
+        stm = session.query(EntityGroupEntity.entityID).filter(EntityGroup.ID == entity_group_id)
         self.db_ids = [i[0] for i in stm.all()]
         if not self.db_ids:
             raise Warning('No wires found with sample ID {}'.format(entity_group_id))

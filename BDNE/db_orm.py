@@ -148,7 +148,7 @@ class EntityGroup(decBase):
     entities = relationship('EntityGroup_entity', back_populates='entityGroup')
 
 
-class EntityGroup_Entity(decBase):
+class EntityGroupEntity(decBase):
     __tablename__ = 'entityGroup_entity'
 
     entityGroupID = Column(Integer, ForeignKey('entityGroup.ID'), primary_key=True)
