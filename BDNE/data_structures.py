@@ -7,7 +7,7 @@ import random
 # For conversion
 import numpy as np
 
-# For cacheing
+# For caching
 from cachetools import cached
 
 # Import for database
@@ -19,7 +19,7 @@ from BDNE import session
 #   A single wire class
 #################################################################
 class Wire:
-    """A class for a single nanowire"""
+    """All data for a unique single element."""
     db_id = None
     experiment_container = []
 
@@ -79,11 +79,12 @@ class Wire:
 #################################################################
 
 class WireCollection:
-    """A collection of wires. Lazy handling, stores only db_ids for the wires and returns either a wire, a set of wires,
-     or a set of measurements.
+    """A collection of elements.
+    Lazy handling, stores only db_ids for the wires and returns either a wire, a set of wires, or a set of measurements.
       Typical usage:
       ``w = WireCollection();
-      w.loadsample(25);``"""
+      w.load_sample(25);``"""
+
     db_ids = []
     cursor = -1
 
@@ -91,26 +92,28 @@ class WireCollection:
         """Representation"""
         return "{} IDs={}".format(self.__class__.__name__, len(self.db_ids))
 
-    def __init__(self, startid=None):
-        # Set up wire collection, either blank or with a set of entity IDs.
-        if type(startid) is list:
-            self.db_ids = startid
+    def __init__(self, start_id=None):
+        """Set up wire collection, either blank or with a set of initial entity IDs."""
+        if type(start_id) is list:
+            self.db_ids = start_id
 
-    def load_sample(self, sampleid):
-        stm = session.query(Entity.ID).filter(Entity.sampleID == sampleid)
+    def load_sample(self, sample_id: int):
+        """Load a sample ID into the WireCollection class"""
+        stm = session.query(Entity.ID).filter(Entity.sampleID == sample_id)
         self.db_ids = [i[0] for i in stm.all()]
         if not self.db_ids:
-            raise Warning('No wires found with sample ID {}'.format(sampleid))
+            raise Warning('No wires found with sample ID {}'.format(sample_id))
 
-    def load_entitygroup(self, entityGroupid):
-        # TODO: implement entitygroup loading
-        stm = session.query(EntityGroup_Entity.entityID).filter(EntityGroup.ID == entityGroupid)
+    def load_entity_group(self, entity_group_id: int):
+        """Load an entityGroup ID into the WireCollection class"""
+        # TODO: implement entity_group loading
+        stm = session.query(EntityGroup_Entity.entityID).filter(EntityGroup.ID == entity_group_id)
         self.db_ids = [i[0] for i in stm.all()]
         if not self.db_ids:
-            raise Warning('No wires found with sample ID {}'.format(entityGroupid))
+            raise Warning('No wires found with sample ID {}'.format(entity_group_id))
 
     def sample(self, k=1):
-        # Get a random subset
+        """Return a random subset of k entities from the WireCollection."""
         if type(k) == int:
             wid = random.choices(self.db_ids, k=k)
             if len(wid) == 1:
@@ -122,18 +125,18 @@ class WireCollection:
         else:
             raise TypeError('Argument to sample must be either an integer or a list of integers.')
 
-    def mask(self, idset):
-        """Create a set from the intersection with other ids"""
-        if type(idset) is WireCollection:
-            idset = idset.db_ids
-        if type(idset) is MeasurementCollection:
-            idset = idset.entity_ids
-        elif type(idset) is list:
+    def mask(self, id_set):
+        """Create a new entity set from an intersection with other entity ids"""
+        if type(id_set) is WireCollection:
+            id_set = id_set.db_ids
+        if type(id_set) is MeasurementCollection:
+            id_set = id_set.entity_ids
+        elif type(id_set) is list:
             pass
         else:
             raise TypeError('Mask must be passed either a list of entity IDs or another WireCollection')
         # Create an intersection (where
-        intersection = set(self.db_ids).intersection(idset)
+        intersection = set(self.db_ids).intersection(id_set)
         return WireCollection(list(intersection))
 
     def logical_mask(self, mask):
@@ -142,7 +145,7 @@ class WireCollection:
         return WireCollection(new_ids)
 
     def get(self, wid):
-        # Two approaches
+        """Return either a single entity (when enumerated) or a MeasurementCollection (when a string is passed)"""
         if type(wid) is int:
             # Return single wire
             return Wire(self.db_ids[wid])
@@ -155,7 +158,7 @@ class WireCollection:
             return MeasurementCollection([i[0] for i in ret], [i[1] for i in ret])
 
     def __next__(self):
-        # To iterate
+        """To iterate over each wire in the Collection"""
         self.cursor = self.cursor + 1
         if self.cursor == len(self.db_ids):
             self.cursor = 0
@@ -165,8 +168,10 @@ class WireCollection:
     def __iter__(self):
         return self
 
-    def __add__(self,other):
-        return WireCollection(self.db_ids+other.db_ids)
+    def __add__(self, other):
+        """Combine two entityCollections and return a merged set"""
+        return WireCollection(self.db_ids + other.db_ids)
+
 
 #################################################################
 #   MeasurementCollection
@@ -175,33 +180,39 @@ class WireCollection:
 #################################################################
 
 class MeasurementCollection:
+    """A class to hold a collection of related measurement.
+    Uses lazy loading, holding only the database IDs and associated entity IDs until a get() or collect() is issued."""
     db_ids = []
     entity_ids = []
     cursor = -1
     post_process = None
 
-    def __init__(self, measurementids=None, entityids=None):
-        if type(measurementids) is list:
-            if len(measurementids) == len(entityids):
-                self.db_ids = measurementids
-                self.entity_ids = entityids
+    def __init__(self, measurement_ids=None, entity_ids=None):
+        """Initialise with a list of measurement_IDs and entity_ids"""
+        # TODO: a list is a bad type here, as it does not guarantee preserving order. Use numpy.array
+        if type(measurement_ids) is list:
+            if len(measurement_ids) == len(entity_ids):
+                self.db_ids = measurement_ids
+                self.entity_ids = entity_ids
             else:
-                raise RuntimeError('Both measurementid and entityid must be provided with the same length.')
+                raise RuntimeError('Both measurement_id and entity_id must be provided with the same length.')
 
     def __repr__(self):
         """Representation"""
         return "{} IDs={}".format(self.__class__.__name__, len(self.db_ids))
 
     def __len__(self):
+        """Return the number of measurements in this collection"""
         return len(self.db_ids)
 
     def sample(self, k=1):
-        # Get a random selection of measurements
+        """Get a random selection of k measurements"""
         selected = random.choices(range(len(self.db_ids)), k=k)
-        stm = self._get(selected)
+        return self._get(selected)
 
     @cached(cache={})
     def _get(self, n):
+        """A cached function to return measurements from the set."""
         # Convert ranges
         if type(n) is range:
             n = list(n)
@@ -227,7 +238,7 @@ class MeasurementCollection:
         return to_return
 
     def collect(self):
-        # Get all measurements
+        """Get all measurements"""
         to_ret = self._get(range(len(self.db_ids)))
         if self.post_process:
             # A post process function exists, apply
@@ -235,32 +246,32 @@ class MeasurementCollection:
         else:
             return to_ret
 
-    def mask(self, idset):
+    def mask(self, id_set):
         """Create a set from the intersection with other ids"""
-        if type(idset) is MeasurementCollection:
-            idset = idset.entity_ids
-        elif type(idset) is list:
+        if type(id_set) is MeasurementCollection:
+            id_set = id_set.entity_ids
+        elif type(id_set) is list:
             pass
         else:
             raise TypeError('Mask must be passed either a list of entity IDs or another MeasurementCollection')
         # Create an intersection on entity IDs
-        (intersection, id1, id2) = np.intersect1d(self.entity_ids, idset, return_indices=True)
+        (intersection, id1, id2) = np.intersect1d(self.entity_ids, id_set, return_indices=True)
         # Filter measurement IDs
         measurement_ids = [self.db_ids[i] for i in id1]
         # Return a new filtered measurement collection
-        return MeasurementCollection(measurementids=measurement_ids, entityids=intersection)
+        return MeasurementCollection(measurement_ids=measurement_ids, entity_ids=intersection)
 
     def __next__(self):
-        # To iterate
+        """To iterate"""
         self.cursor = self.cursor + 1
         if self.cursor == len(self.db_ids):
             self.cursor = 0
             raise StopIteration()
-        toret = self._get([self.cursor])
+        measurement = self._get([self.cursor])
         if self.post_process:
-            return np.array(self.post_process(toret))
+            return np.array(self.post_process(measurement))
         else:
-            return toret
+            return measurement
 
     def __iter__(self):
         return self
@@ -271,49 +282,62 @@ class MeasurementCollection:
 #################################################################
 
 class PostProcess:
+    """A wrapper around a MeasurementCollection or another PostProcess function to cleanly add line-by-line
+    processing. """
     mc = None
     func = None
     _cursor = 0
 
     def __init__(self, mc=None):
-        if type(mc) is MeasurementCollection:
+        """Initialise the PostProcess class by passing a measurementCollection or a PostProcess class"""
+        if type(mc) in [MeasurementCollection, PostProcess]:
             self.mc = mc
+        elif type(mc) is None:
+            return
+        else:
+            raise TypeError(
+                'PostProcess must be initialised with a MeasurementCollection or a PostProcess class, not a  "{}"'
+                .format(type(mc)))
 
     def __repr__(self):
         """Representation"""
         if self.func:
-            fname = self.func.__name__
+            function_name = self.func.__name__
         else:
-            fname = 'None'
+            function_name = 'None'
         if self.mc:
-            mcname = repr(self.mc)
+            dataset_name = repr(self.mc)
         else:
-            mcname = 'None'
-        return "Postprocessing function [{}] attached to {}".format(fname, mcname)
+            dataset_name = 'None'
+        return "Postprocessing function [{}] attached to {}".format(function_name, dataset_name)
 
     def set_function(self, func):
+        """Set the function. This should take the underlying data type as an input and return something based on
+        this. """
         self.func = func
 
     def set_data(self, mc):
+        """Set the datasource, either a MeasurementClass or a PostProcess class."""
         self.mc = mc
 
     def __next__(self):
-        # To iterate
+        """"To iterate"""
         self._cursor = self._cursor + 1
         if self._cursor == len(self.mc.db_ids):
             self._cursor = 0
             raise StopIteration()
-        toret = self.mc._get([self._cursor])
-        return np.array(self.func(toret))
+        processed = self.mc._get([self._cursor])
+        return np.array(self.func(processed))
 
     def __iter__(self):
         return self
 
     def collect(self):
-        # Get all measurements
-        to_ret = self.mc._get(range(len(self.mc.db_ids)))
+        """Get all measurements"""
+        to_ret = self.mc.collect()
         return np.array([self.func(i) for i in to_ret])
 
     def sample(self, k=1):
+        """Return a subset of k processed sets"""
         to_ret = self.mc.sample(k=k)
         return np.array([self.func(i) for i in to_ret])
