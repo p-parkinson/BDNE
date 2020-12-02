@@ -126,6 +126,8 @@ class WireCollection:
         """Create a set from the intersection with other ids"""
         if type(idset) is WireCollection:
             idset = idset.db_ids
+        if type(idset) is MeasurementCollection:
+            idset = idset.entity_ids
         elif type(idset) is list:
             pass
         else:
@@ -133,6 +135,11 @@ class WireCollection:
         # Create an intersection (where
         intersection = set(self.db_ids).intersection(idset)
         return WireCollection(list(intersection))
+
+    def logical_mask(self, mask):
+        """Create a new wire collection using a logical mask"""
+        new_ids = np.array(self.db_ids)[np.array(mask)].tolist()
+        return WireCollection(new_ids)
 
     def get(self, wid):
         # Two approaches
@@ -158,6 +165,8 @@ class WireCollection:
     def __iter__(self):
         return self
 
+    def __add__(self,other):
+        return WireCollection(self.db_ids+other.db_ids)
 
 #################################################################
 #   MeasurementCollection
@@ -182,6 +191,9 @@ class MeasurementCollection:
     def __repr__(self):
         """Representation"""
         return "{} IDs={}".format(self.__class__.__name__, len(self.db_ids))
+
+    def __len__(self):
+        return len(self.db_ids)
 
     def sample(self, k=1):
         # Get a random selection of measurements
@@ -300,4 +312,8 @@ class PostProcess:
     def collect(self):
         # Get all measurements
         to_ret = self.mc._get(range(len(self.mc.db_ids)))
+        return np.array([self.func(i) for i in to_ret])
+
+    def sample(self, k=1):
+        to_ret = self.mc.sample(k=k)
         return np.array([self.func(i) for i in to_ret])
