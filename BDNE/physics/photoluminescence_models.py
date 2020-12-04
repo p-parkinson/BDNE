@@ -139,6 +139,7 @@ class PLfit():
         self.remove_baseline = False  # remove of constant baseline
         self.spectral_correct = False  # correction with spectral response
         self.clip_spectra = False  # choose a section of the spectrum to analyse
+        self.smooth = True # smooths spectra with a moving average
         self.normalise_spectrum = True
         self.plot_output = True  # plot the data and fit spectrum
         self.ftol = 1e-4  # Settings for optimizer
@@ -149,6 +150,7 @@ class PLfit():
         self.A_lim = 3  # Amplitude limit, below which ignore the spectrum
         self.spec_lims = [np.min(self.eV), np.max(self.eV)]  # spectral limits for clipping (eV)
         self.response = np.array(1044 * [1])  # spectral response field, default unity unless imported
+        self.smooth_range = 5 #number of spectral points to use for moving average smoothing
 
         # results
         self.output_par = []
@@ -166,6 +168,15 @@ class PLfit():
             ind = np.ones(self.eV.shape)
             data = spec
             eV = self.eV
+
+        # function to calculate a moving average to smooth the input data
+        def moving_average(x, w):
+            return np.convolve(x, np.ones(w), 'valid') / w
+            
+        #smooth the spectrum
+        if self.smooth:
+            data = moving_average(data,self.smooth_range)           
+            self.eV = moving_average(self.eV,self.smooth_range)
 
         # calculate and subtract constant baseline
         if self.remove_baseline:
