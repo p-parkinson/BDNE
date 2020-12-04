@@ -129,6 +129,8 @@ class PLfit():
         self.model = model  # model string from definitions above
         self.bounds = []
         self.par0 = []
+        
+        
 
         # defines the x axis of the spectrum (energy)
         i = np.arange(1, 1045)
@@ -144,6 +146,12 @@ class PLfit():
         self.plot_output = True  # plot the data and fit spectrum
         self.ftol = 1e-4  # Settings for optimizer
         self.tol = 1e-9  # Settings for optimizer
+        
+        #Optional second peak to fit (using the same model as the first)
+        # TODO: Implement second peak with a second model of choice
+        self.peak_2 = False
+        self.par0_2 = []
+        self.bounds_2 = []
 
         # limits and thresholds
         self.width_thresh = 10  # will remove spectra with width less than this (cosmic rays) (in spectrum increments)
@@ -198,20 +206,44 @@ class PLfit():
         # normalise spectrum
         if self.normalise_spectrum:
             data = data / max(data)
-
-        # function to calculate the squared residual to minimise in fit
-        def residuals(par):
-            return np.sum((self.model(eV, par) - data) ** 2)
-
-        # do the fitting
+            
+            
+        #Fitting with 2 peaks
+        if self.peak_2:
+            # function to calculate the squared residual to minimise in fit
+            def residuals(par): 
+                par1 = par[:len(par)//2]
+                par2 = par[len(par)//2:]
+                peak1 = (self.model(self.eV,par1))
+                peak2 = (self.model(self.eV,par2))
+                total = peak1 + peak2
+                return (np.sum((total-data)**2))
+            bounds = [self.bounds,self.bounds_2]
+            par0 = [self.par0,self.par0_2]
             # do the fitting
-        output = optimize.minimize(residuals, np.array(self.par0),
+            output = optimize.minimize(residuals, par0 , method='Powell', tol=1e-7,bounds=bounds)  
+            
+            # output the parameters
+            par1 = output.x[:len(output.x)//2]
+            par2 = output.x[len(output.x)//2:]
+            self.output_PL_1 = self.model(self.eV,par1)
+            self.output_PL_2 = self.model(self.eV,par2)
+            self.output_PL = self.output_PL_peak1 + self.output_PL_peak2
+        # fitting with 1 peak
+        else:
+            # function to calculate the squared residual to minimise in fit
+            def residuals(par):
+                return np.sum((self.model(eV, par) - data) ** 2)
+            # do the fitting
+            output = optimize.minimize(residuals, np.array(self.par0),
                                    method='Powell', tol=self.tol,
                                    options={'ftol': self.ftol}, bounds=self.bounds)
-        # output the parameters
-        self.init_PL = self.model(eV, self.par0)
+                                   
+            # output the parameters
+            self.init_PL = self.model(eV, self.par0)
+            self.output_PL = self.model(self.eV, output.x)
+            
         self.output = output
-        self.output_PL = self.model(self.eV, output.x)
 
         # Show the fit if required
         if self.plot_output == 1:
