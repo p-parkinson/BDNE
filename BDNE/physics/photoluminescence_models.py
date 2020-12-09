@@ -161,12 +161,18 @@ class PLfit():
         self.smooth_range = 5 #number of spectral points to use for moving average smoothing
 
         # results
-        self.output_par = []
+        self.output = []
         self.output_PL = []
         self.output_res = []  # squared residuals
 
     # calling the class fits the spectrum
     def __call__(self, spec):
+    
+        #define the x axis of the spectrum (energy)
+        i = np.arange(1, 1045)
+        self.wavelength = (346 + 0.796 * i - 3.79e-5 * i ** 2)
+        self.eV = 1239.842 / np.array(self.wavelength)
+
 
         if self.clip_spectra:
             ind = np.where(np.logical_and(self.eV >= self.spec_lims[0], self.eV <= self.spec_lims[1]))
@@ -223,7 +229,7 @@ class PLfit():
             # do the fitting
             output = optimize.minimize(residuals, par0 , method='Powell', tol=1e-7,bounds=bounds)  
             
-            # output the parameters
+            # output the PL
             par1 = output.x[:len(output.x)//2]
             par2 = output.x[len(output.x)//2:]
             self.output_PL_1 = self.model(self.eV,par1)
@@ -239,14 +245,18 @@ class PLfit():
                                    method='Powell', tol=self.tol,
                                    options={'ftol': self.ftol}, bounds=self.bounds)
                                    
-            # output the parameters
+            # output the PL
             self.init_PL = self.model(eV, self.par0)
             self.output_PL = self.model(self.eV, output.x)
-            
-        self.output = output
+                         
+        #add the fitting parameters to an accessible array
+        out = np.append(output.x,output.fun)
+        self.output.append(out)
+        self.output_res.append(output.fun)
 
         # Show the fit if required
         if self.plot_output == 1:
+            plt.figure()
             plt.plot(eV, data)
             plt.plot(self.eV, self.output_PL)
             plt.xlabel('Energy (eV)')
@@ -254,3 +264,19 @@ class PLfit():
             plt.show()
 
         return output.x
+        
+    #function to save all output parameters in array    
+    def save(self):
+        if self.output_res:
+            o = np.array(self.output)
+            np.savetxt('output.txt',o)
+            return 'Data saved successfully'
+        else:
+            return 'Save failed: no data to save'
+    
+    #function to clear array of all output parameters
+    def clear(self):
+        self.output_res = []
+        self.output = []
+        return 'Buffer cleared'
+    
