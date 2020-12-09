@@ -1,7 +1,7 @@
 # Test code for PL model fitting
 # Examples of how to implement the fitter
 # Author  : Stephen Church <stephen.church@manchester.ac.uk>
-# Version : 0.2
+# Version : 0.3
 
 import time
 
@@ -31,6 +31,7 @@ fitter.clip_spectra = True
 fitter.spec_lims = [1.75, 3]
 fitter.A_lim = 3
 fitter.plot_output = False
+fitter.plot_init = False
 
 ###############################################################
 # Iterating using the fitter
@@ -48,22 +49,32 @@ data = sample.get('spectra').collect()
 start = time.time()
 for (wire, PL) in zip(sample, data):
     print('{} : wire ID {}'.format(i, wire.db_id))
-    par[i, :] = fitter(PL)
-
+    
+    # Fit the spectra
+    fitter(PL)
+    
     # estimate the time remaining
     i = i + 1
     if not (i % 10):
         elapsed = time.time() - start
         print('Elapsed time: {}s, ETA : {}s ({}s/w)'.format(elapsed, round((n_spec - i - 1) * elapsed / (i + 1)),elapsed/i))
 
+# Access the output fit parameters
+par = fitter.output
 # Cut par down to size, removing blank sets
 par = par[0:(i-1), :]
+
+# Save the fit parameters to output.txt
+fitter.save()
+
+# Clear the fit parameters from the buffer
+fitter.clear()
 
 ###############################################################
 # Show results
 ###############################################################
 
-labels = ['sigma', 'E_g', 'T', 'A']
+labels = ['sigma', 'E_g', 'T', 'A', 'Residuals']
 plt.clf()
 for i in range(4):
     plt.subplot(2, 2, i + 1)
