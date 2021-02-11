@@ -289,15 +289,18 @@ class MeasurementCollection:
             else:
                 cached = None
             # Collect the rest
-            stm = session.query(Measurement.data, Object.entity_id, Measurement.ID).join(Object).filter(
-                Measurement.ID.in_(to_get))
-            stmall = stm.all()
-            # Format from DB
-            db_data = [np.array(i[0]).squeeze() for i in stmall]
-            entity = [i[1] for i in stmall]
-            db_id = [i[2] for i in stmall]
-            # Convert to a dataframe
-            to_return = pd.DataFrame(data={'db_id': db_id, 'data': db_data, 'entity': entity}, index=entity)
+            if len(to_get) > 0:
+                stm = session.query(Measurement.data, Object.entity_id, Measurement.ID).join(Object).filter(
+                    Measurement.ID.in_(to_get))
+                stmall = stm.all()
+                # Format from DB
+                db_data = [np.array(i[0]).squeeze() for i in stmall]
+                entity = [i[1] for i in stmall]
+                db_id = [i[2] for i in stmall]
+                # Convert to a dataframe
+                to_return = pd.DataFrame(data={'db_id': db_id, 'entity': entity, 'data': db_data}, index=entity)
+            else:
+                to_return = pd.DataFrame(columns=['db_id', 'entity', 'data'])
             if self._use_cache:
                 # Update cache
                 self._db_cache.update(to_return['db_id'].to_numpy(), to_return)
@@ -311,6 +314,10 @@ class MeasurementCollection:
     def collect(self):
         """Get all measurements"""
         return self._get(range(len(self.db_ids)))
+
+    def collect_as_matrix(self):
+        """Get all measurements as an n x m array, where n wires with m datapoints per measurement"""
+        return np.stack(self.collect()['data'])
 
     def mask(self, id_set):
         """Create a set from the intersection with other ids"""
@@ -424,3 +431,6 @@ class PostProcess:
         to_ret = self.mc.sample(k=k)
         to_ret['processed'] = to_ret.apply(lambda row: self.func(row[self.data_column]), axis=1)
         return to_ret
+
+    def collect_as_matrix(self):
+        return np.stack(self.collect()['processed'])
