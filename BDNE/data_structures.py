@@ -16,7 +16,7 @@ from BDNE import session
 
 
 #################################################################
-#   DBCache
+#   A cache class for storing data locally
 #################################################################
 
 class DBCache:
@@ -353,11 +353,16 @@ class PostProcess:
     mc = None
     func = None
     _cursor = 0
+    data_column
 
     def __init__(self, mc=None):
         """Initialise the PostProcess class by passing a measurementCollection or a PostProcess class"""
         if type(mc) in [MeasurementCollection, PostProcess]:
             self.mc = mc
+            if type(mc) is MeasurementCollection:
+                self.data_column = 'data'
+            elif type(mc) is PostProcess:
+                self.data_column = 'processed'
         elif type(mc) is None:
             return
         else:
@@ -389,6 +394,10 @@ class PostProcess:
     def set_data(self, mc):
         """Set the datasource, either a MeasurementClass or a PostProcess class."""
         self.mc = mc
+        if type(mc) is MeasurementCollection:
+            self.data_column = 'data'
+        elif type(mc) is PostProcess:
+            self.data_column = 'processed'
 
     def __next__(self):
         """"To iterate"""
@@ -398,7 +407,7 @@ class PostProcess:
             raise StopIteration()
         processed = self.mc._get([self._cursor])
         # This is a dataframe
-        processed['processed'] = self.func(processed['data'])
+        processed['processed'] = self.func(processed[self.data_column])
         return processed
 
     def __iter__(self):
@@ -407,11 +416,11 @@ class PostProcess:
     def collect(self):
         """Get all measurements"""
         to_ret = self.mc.collect()
-        to_ret['processed'] = to_ret.apply(lambda row: self.func(row['data']), axis=1)
+        to_ret['processed'] = to_ret.apply(lambda row: self.func(row[self.data_column]), axis=1)
         return to_ret
 
     def sample(self, k=1):
         """Return a subset of k processed sets"""
         to_ret = self.mc.sample(k=k)
-        to_ret['processed'] = to_ret.apply(lambda row: self.func(row['data']), axis=1)
+        to_ret['processed'] = to_ret.apply(lambda row: self.func(row[self.data_column]), axis=1)
         return to_ret
