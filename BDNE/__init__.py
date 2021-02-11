@@ -17,10 +17,15 @@ package_directory = pathlib.Path(__file__).parent.absolute()
 config = configparser.ConfigParser()
 config.read(package_directory / 'config.ini')
 
+
 #####################################################
 # Connect to database
 #####################################################
-session = connect(config.get('DATABASE', 'server'),
-                  config.get('DATABASE', 'port'),
-                  config.get('DATABASE', 'user'),
-                  config.get('DATABASE', 'pass'))
+def reconnect():
+    return connect(config.get('DATABASE', 'server'),
+                   config.get('DATABASE', 'port'),
+                   config.get('DATABASE', 'user'),
+                   config.get('DATABASE', 'pass'))
+
+
+session = reconnect()
