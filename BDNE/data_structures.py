@@ -187,7 +187,6 @@ class MeasurementCollection:
     db_ids = []
     entity_ids = []
     cursor = -1
-    post_process = None
 
     def __init__(self, measurement_ids=None, entity_ids=None):
         """Initialise with a list of measurement_IDs and entity_ids"""
@@ -250,12 +249,7 @@ class MeasurementCollection:
 
     def collect(self):
         """Get all measurements"""
-        to_ret = self._get(range(len(self.db_ids)))
-        if self.post_process:
-            # A post process function exists, apply
-            return np.array([self.post_process(i) for i in to_ret])
-        else:
-            return to_ret
+        return self._get(range(len(self.db_ids)))
 
     def mask(self, id_set):
         """Create a set from the intersection with other ids"""
@@ -266,7 +260,7 @@ class MeasurementCollection:
         elif type(id_set) is pd.DataFrame:
             id_set = id_set.index.tolist()
         else:
-            raise TypeError('Mask must be passed either a list of entity IDs or another MeasurementCollection')
+            raise TypeError('Mask must be passed either a list of entity IDs, another MeasurementCollection or a Measurement dataframe')
         # Create an intersection on entity IDs
         (intersection, id1, id2) = np.intersect1d(self.entity_ids, id_set, return_indices=True)
         # Filter measurement IDs
@@ -280,11 +274,7 @@ class MeasurementCollection:
         if self.cursor == len(self.db_ids):
             self.cursor = 0
             raise StopIteration()
-        measurement = self._get([self.cursor])
-        if self.post_process:
-            return np.array(self.post_process(measurement))
-        else:
-            return measurement
+        return self._get([self.cursor])
 
     def __iter__(self):
         return self
