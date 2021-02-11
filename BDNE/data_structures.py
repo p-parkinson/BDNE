@@ -10,12 +10,57 @@ import numpy as np
 # For datasets
 import pandas as pd
 
-# For caching
-from cachetools import cached
-
 # Import for database
 from BDNE.db_orm import *
 from BDNE import session
+
+
+#################################################################
+#   DBCache
+#################################################################
+
+class DBCache:
+    """A simple cache class - never kicks out old data unless told to"""
+    _cache: pd.DataFrame
+
+    def __init__(self):
+        """Set up pandas dataframe to store data"""
+        self._cache = pd.DataFrame()
+
+    def clear(self):
+        """Empty the cache"""
+        self._cache = pd.DataFrame()
+
+    def __call__(self, ids):
+        """Convenience function"""
+        return self.check(ids)
+
+    def check(self, ids):
+        """Look for hits with ids, must be unique"""
+        if len(ids) == 0:
+            return None, None
+        ids = np.array(ids)
+        # Get from cache
+        cached = self._cache[self._cache.index.isin(ids)]
+        # List unfound items to be read in
+        unfound = np.setdiff1d(ids, cached.index.to_numpy()).tolist()
+        return unfound, cached
+
+    def update(self, ids, data):
+        # Convert to integer
+        ids = ids.astype('int')
+        # Make sure not to update existing data
+        missing = np.setdiff1d(ids, self._cache.index.to_numpy())
+        # update index
+        oldidx = data.index
+        data.index = ids
+        # Create new dataframe
+        self._cache = self._cache.append(data[data.index.isin(missing)])
+        # Restore
+        data.index = oldidx
+
+    def __len__(self):
+        return self._cache.memory_usage(deep=True)
 
 
 #################################################################
@@ -191,6 +236,8 @@ class MeasurementCollection:
     db_ids = []
     entity_ids = []
     cursor = -1
+    _db_cache = DBCache()
+    _use_cache = True
 
     def __init__(self, measurement_ids=None, entity_ids=None):
         """Initialise with a list of measurement_IDs and entity_ids"""
@@ -215,7 +262,6 @@ class MeasurementCollection:
         selected = random.choices(range(len(self.db_ids)), k=k)
         return self._get(selected)
 
-    # @cached(cache={})
     def _get(self, n):
         """A cached function to return measurements from the set."""
         # Convert ranges
@@ -231,28 +277,36 @@ class MeasurementCollection:
             raise KeyError('Index must be in range 0 to {}'.format(len(self.db_ids)))
         # Convert indices to db_ids
         to_get = [self.db_ids[i] for i in n]
-        entity = [self.entity_ids[i] for i in n]
-        # Three methods - single, zero length, multiple
-        if len(to_get) == 1:
-            # Single data element to return
-            stm = session.query(Measurement.data).filter(Measurement.ID == to_get[0])
-            to_return = [np.array(stm.first()[0])]
-            db_id = to_get
-        elif len(to_get) == 0:
+        # Zero length, multiple
+        if len(to_get) == 0:
             # Nothing to return
             return None
         else:
             # Multiple datasets to return
+            # Need to check cache
+            if self._use_cache:
+                (to_get, cached) = self._db_cache.check(to_get)
+            else:
+                cached = None
+            # Collect the rest
             stm = session.query(Measurement.data, Object.entity_id, Measurement.ID).join(Object).filter(
                 Measurement.ID.in_(to_get))
             stmall = stm.all()
-            to_return = [np.array(i[0]).squeeze() for i in stmall]
+            # Format from DB
+            db_data = [np.array(i[0]).squeeze() for i in stmall]
             entity = [i[1] for i in stmall]
             db_id = [i[2] for i in stmall]
-        # Convert to a dataframe
-        if to_return is not None:
-            to_return = pd.DataFrame(data={'db_id': db_id, 'data': to_return}, index=entity)
-        return to_return
+            # Convert to a dataframe
+            to_return = pd.DataFrame(data={'db_id': db_id, 'data': db_data, 'entity': entity}, index=entity)
+            if self._use_cache:
+                # Update cache
+                self._db_cache.update(to_return['db_id'].to_numpy(), to_return)
+                # Merge cached and hit
+                if len(cached) > 0:
+                    cached.index = cached['entity']
+                    to_return = to_return.append(cached)
+            # Return
+            return to_return
 
     def collect(self):
         """Get all measurements"""
