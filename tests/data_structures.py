@@ -9,7 +9,7 @@ from BDNE import data_structures
 # Set up a wire collection
 w = data_structures.WireCollection()
 # Populate from the database, EntityGroup 3
-w.load_entitygroup(3)
+w.load_entity_group(3)
 # List how many wires samples
 print('Wire Collection has {} wires'.format(len(w.db_ids)))
 
@@ -25,7 +25,7 @@ print(wire.experiments())
 # Get all wire lengths
 spectra = w.get('spectra')
 # State how many obtained
-print('Obtained measurement set with {} measurements'.format(len(spectra.db_ids)))
+print('Obtained measurement set with {} measurements'.format(len(spectra)))
 # Add a post-process sum onto the spectra
 PL = data_structures.PostProcess(spectra)
 pkpos = data_structures.PostProcess(spectra)
@@ -49,11 +49,11 @@ plt.xlabel('Spectra (arb)')
 
 # Show histogram of length data
 plt.subplot(223)
-plt.hist(pkpos.collect(), 100)
+plt.hist(pkpos.collect()['processed'], 100)
 plt.xlabel('PL peak position')
 plt.ylabel('Frequency')
 plt.subplot(224)
-plt.hist(PL.collect(), 100)
+plt.hist(PL.collect()['processed'], 100)
 plt.title('PL intensity of {} wires'.format(len(w.db_ids)))
 plt.xlabel('Intensity (um)')
 plt.ylabel('Frequency')
