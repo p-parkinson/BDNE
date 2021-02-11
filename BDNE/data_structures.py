@@ -7,6 +7,9 @@ import random
 # For conversion
 import numpy as np
 
+# For datasets
+import pandas as pd
+
 # For caching
 from cachetools import cached
 
@@ -175,8 +178,7 @@ class WireCollection:
 
 #################################################################
 #   MeasurementCollection
-#  TODO: create as_pandas() to collect as a pandas list
-#  TODO: Create "clever" memoization, for each id.
+#  #  TODO: Create "clever" memoization, for each id.
 #################################################################
 
 class MeasurementCollection:
@@ -210,7 +212,7 @@ class MeasurementCollection:
         selected = random.choices(range(len(self.db_ids)), k=k)
         return self._get(selected)
 
-    @cached(cache={})
+   # @cached(cache={})
     def _get(self, n):
         """A cached function to return measurements from the set."""
         # Convert ranges
@@ -226,15 +228,24 @@ class MeasurementCollection:
             raise KeyError('Index must be in range 0 to {}'.format(len(self.db_ids)))
         # Convert indices to db_ids
         to_get = [self.db_ids[i] for i in n]
+        entity = [self.entity_ids[i] for i in n]
         # Three methods - single, zero length, multiple
         if len(to_get) == 1:
             stm = session.query(Measurement.data).filter(Measurement.ID == to_get[0])
-            to_return = np.array(stm.first()[0]).squeeze()
+            to_return = [np.array(stm.first()[0])]
+            db_id = to_get
         elif len(to_get) == 0:
             to_return = None
         else:
-            stm = session.query(Measurement.data).filter(Measurement.ID.in_(to_get))
-            to_return = [np.array(i[0]).squeeze() for i in stm.all()]
+            #stm = session.query(Measurement.data,Entity.ID).filter(Measurement.ID.in_(to_get))
+            stm = session.query(Measurement.data,Object.entity_id, Measurement.ID).join(Object).filter(Measurement.ID.in_(to_get))
+            stmall = stm.all()
+            to_return = [np.array(i[0]).squeeze() for i in stmall]
+            entity = [i[1] for i in stmall]
+            db_id = [i[2] for i in stmall]
+        # Convert to a dataframe
+        if not to_return is None:
+            to_return = pd.DataFrame(data={'db_id':db_id,'data':to_return}, index=entity)
         return to_return
 
     def collect(self):
@@ -252,6 +263,8 @@ class MeasurementCollection:
             id_set = id_set.entity_ids
         elif type(id_set) is list:
             pass
+        elif type(id_set) is pd.DataFrame:
+            id_set = id_set.index.tolist()
         else:
             raise TypeError('Mask must be passed either a list of entity IDs or another MeasurementCollection')
         # Create an intersection on entity IDs
@@ -327,7 +340,9 @@ class PostProcess:
             self._cursor = 0
             raise StopIteration()
         processed = self.mc._get([self._cursor])
-        return np.array(self.func(processed))
+        # This is a dataframe
+        processed['processed'] = self.func(processed['data'])
+        return processed
 
     def __iter__(self):
         return self
@@ -335,9 +350,11 @@ class PostProcess:
     def collect(self):
         """Get all measurements"""
         to_ret = self.mc.collect()
-        return np.array([self.func(i) for i in to_ret])
+        to_ret['processed'] = to_ret.apply(lambda row : self.func(row['data']), axis = 1)
+        return to_ret
 
     def sample(self, k=1):
         """Return a subset of k processed sets"""
         to_ret = self.mc.sample(k=k)
-        return np.array([self.func(i) for i in to_ret])
+        to_ret['processed'] = to_ret.apply(lambda row : self.func(row['data']), axis = 1)
+        return to_ret
