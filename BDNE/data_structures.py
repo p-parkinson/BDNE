@@ -100,6 +100,10 @@ class WireCollection:
         if type(start_id) is list:
             self.db_ids = start_id
 
+    def __len__(self):
+        """The number of wires in this collection"""
+        return len(self.db_ids)
+
     def load_sample(self, sample_id: int):
         """Load a sample ID into the WireCollection class"""
         stm = session.query(Entity.ID).filter(Entity.sampleID == sample_id)
@@ -211,7 +215,7 @@ class MeasurementCollection:
         selected = random.choices(range(len(self.db_ids)), k=k)
         return self._get(selected)
 
-   # @cached(cache={})
+    # @cached(cache={})
     def _get(self, n):
         """A cached function to return measurements from the set."""
         # Convert ranges
@@ -230,21 +234,24 @@ class MeasurementCollection:
         entity = [self.entity_ids[i] for i in n]
         # Three methods - single, zero length, multiple
         if len(to_get) == 1:
+            # Single data element to return
             stm = session.query(Measurement.data).filter(Measurement.ID == to_get[0])
             to_return = [np.array(stm.first()[0])]
             db_id = to_get
         elif len(to_get) == 0:
-            to_return = None
+            # Nothing to return
+            return None
         else:
-            #stm = session.query(Measurement.data,Entity.ID).filter(Measurement.ID.in_(to_get))
-            stm = session.query(Measurement.data,Object.entity_id, Measurement.ID).join(Object).filter(Measurement.ID.in_(to_get))
+            # Multiple datasets to return
+            stm = session.query(Measurement.data, Object.entity_id, Measurement.ID).join(Object).filter(
+                Measurement.ID.in_(to_get))
             stmall = stm.all()
             to_return = [np.array(i[0]).squeeze() for i in stmall]
             entity = [i[1] for i in stmall]
             db_id = [i[2] for i in stmall]
         # Convert to a dataframe
-        if not to_return is None:
-            to_return = pd.DataFrame(data={'db_id':db_id,'data':to_return}, index=entity)
+        if to_return is not None:
+            to_return = pd.DataFrame(data={'db_id': db_id, 'data': to_return}, index=entity)
         return to_return
 
     def collect(self):
@@ -260,8 +267,10 @@ class MeasurementCollection:
         elif type(id_set) is pd.DataFrame:
             id_set = id_set.index.tolist()
         else:
-            raise TypeError('Mask must be passed either a list of entity IDs, another MeasurementCollection or a Measurement dataframe')
-        # Create an intersection on entity IDs
+            raise TypeError(
+                'Mask must be passed either a list of entity IDs, another MeasurementCollection or a Measurement '
+                'dataframe')
+            # Create an intersection on entity IDs
         (intersection, id1, id2) = np.intersect1d(self.entity_ids, id_set, return_indices=True)
         # Filter measurement IDs
         measurement_ids = [self.db_ids[i] for i in id1]
@@ -300,7 +309,7 @@ class PostProcess:
         else:
             raise TypeError(
                 'PostProcess must be initialised with a MeasurementCollection or a PostProcess class, not a  "{}"'
-                .format(type(mc)))
+                    .format(type(mc)))
 
     def __repr__(self):
         """Representation"""
@@ -313,6 +322,10 @@ class PostProcess:
         else:
             dataset_name = 'None'
         return "Postprocessing function [{}] attached to {}".format(function_name, dataset_name)
+
+    def __len__(self):
+        """Return number of underlying datasets"""
+        return len(self.mc)
 
     def set_function(self, func):
         """Set the function. This should take the underlying data type as an input and return something based on
@@ -340,11 +353,11 @@ class PostProcess:
     def collect(self):
         """Get all measurements"""
         to_ret = self.mc.collect()
-        to_ret['processed'] = to_ret.apply(lambda row : self.func(row['data']), axis = 1)
+        to_ret['processed'] = to_ret.apply(lambda row: self.func(row['data']), axis=1)
         return to_ret
 
     def sample(self, k=1):
         """Return a subset of k processed sets"""
         to_ret = self.mc.sample(k=k)
-        to_ret['processed'] = to_ret.apply(lambda row : self.func(row['data']), axis = 1)
+        to_ret['processed'] = to_ret.apply(lambda row: self.func(row['data']), axis=1)
         return to_ret
