@@ -353,7 +353,7 @@ class PostProcess:
     mc = None
     func = None
     _cursor = 0
-    data_column
+    data_column = 'data'
 
     def __init__(self, mc=None):
         """Initialise the PostProcess class by passing a measurementCollection or a PostProcess class"""
