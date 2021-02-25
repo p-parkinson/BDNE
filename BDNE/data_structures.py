@@ -83,16 +83,20 @@ class Wire:
         return r
 
     def __init__(self, db_id=None):
-        """Initialise the wire class as empty or with a db_id. Cache is optional, can reduce database hits."""
+        """Initialise the wire class as empty or with a db_id."""
         if db_id is None:
             return
         # ID given
         self.db_id = db_id
 
     def sample(self):
+        """Return sample ID"""
         if self._sample_id is None:
             self._sample_id = session.query(Entity.sampleID).filter(Entity.ID == self.db_id).first()[0]
-        return self._sample_id
+        stm = session.query(Sample.ID, Sample.supplier, Sample.material, Sample.preparation_date,
+                            Sample.preparation_method, Sample.substrate).filter(Sample.ID == self._sample_id).first()
+        keys = ['ID', 'Supplier', 'Material', 'Preparation_date', 'Preparation_method', 'Substrate']
+        return dict(zip(keys, stm))
 
     def populate_from_db(self):
         """Retrieve all experiments associated with this nanowire ID"""
@@ -301,7 +305,8 @@ class MeasurementCollection:
                 cached = None
             # Collect the rest
             if len(to_get) > 0:
-                stm = session.query(Measurement.data, Object.entity_id, Measurement.ID, Measurement.experiment_ID).join(Object).filter(
+                stm = session.query(Measurement.data, Object.entity_id, Measurement.ID, Measurement.experiment_ID).join(
+                    Object).filter(
                     Measurement.ID.in_(to_get))
                 stmall = stm.all()
                 # Format from DB
@@ -314,7 +319,7 @@ class MeasurementCollection:
                     data={'db_id': db_id, 'entity': entity, 'experiment_id': exp_id, 'data': db_data},
                     index=entity)
             else:
-                to_return = pd.DataFrame(columns=['db_id', 'entity','experiment_id', 'data'])
+                to_return = pd.DataFrame(columns=['db_id', 'entity', 'experiment_id', 'data'])
             if self._use_cache:
                 # Update cache
                 self._db_cache.update(to_return['db_id'].to_numpy(), to_return)
@@ -389,7 +394,7 @@ class PostProcess:
         else:
             raise TypeError(
                 'PostProcess must be initialised with a MeasurementCollection or a PostProcess class, not a  "{}"'
-                    .format(type(mc)))
+                .format(type(mc)))
 
     def __repr__(self):
         """Representation"""
@@ -475,19 +480,19 @@ class ExperimentMetadata(Mapping):
     def keys(self):
         return self._int.keys()
 
-    def load_values(self,experiment_id=None):
+    def load_values(self, experiment_id=None):
         """Refresh from database"""
         if experiment_id:
             self.experiment_id = experiment_id
-        stm = session.query(Metadata.key, Metadata.value)\
+        stm = session.query(Metadata.key, Metadata.value) \
             .filter(Metadata.experiment_id == self.experiment_id).all()
         # Dictionary comprehension to internal
         if len(stm) > 0:
-            self._int = {k:v for (k,v) in stm}
+            self._int = {k: v for (k, v) in stm}
         else:
             self._int = {}
 
-    def __init__(self, experiment_id = None, measurement_id: int = None):
+    def __init__(self, experiment_id=None, measurement_id: int = None):
         """Initialise the class to either an experimental ID or a measurement ID associated with an experiment."""
         if experiment_id:
             if type(experiment_id) in [int, np.int, np.int64]:
