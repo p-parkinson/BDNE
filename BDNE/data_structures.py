@@ -10,6 +10,9 @@ import numpy as np
 # For datasets
 import pandas as pd
 
+# For Experimental metadata as a mapping
+from collections.abc import Mapping
+
 # Import for database
 from BDNE.db_orm import *
 from BDNE import session
@@ -69,11 +72,15 @@ class DBCache:
 class Wire:
     """All data for a unique single element."""
     db_id = None
+    _sample_id = None
     experiment_container = []
 
     def __repr__(self):
         """Representation"""
-        return "{} ID={}".format(self.__class__.__name__, self.db_id)
+        r = "{} ID={}".format(self.__class__.__name__, self.db_id)
+        if len(self.experiment_container) > 0:
+            r += " {}".format([i[0] for i in self.experiment_container])
+        return r
 
     def __init__(self, db_id=None):
         """Initialise the wire class as empty or with a db_id. Cache is optional, can reduce database hits."""
@@ -81,6 +88,11 @@ class Wire:
             return
         # ID given
         self.db_id = db_id
+
+    def sample(self):
+        if self._sample_id is None:
+            self._sample_id = session.query(Entity.sampleID).filter(Entity.ID == self.db_id).first()[0]
+        return self._sample_id
 
     def populate_from_db(self):
         """Retrieve all experiments associated with this nanowire ID"""
@@ -227,7 +239,6 @@ class WireCollection:
 
 #################################################################
 #   MeasurementCollection
-#  #  TODO: Create "clever" memoization, for each id.
 #################################################################
 
 class MeasurementCollection:
@@ -290,17 +301,20 @@ class MeasurementCollection:
                 cached = None
             # Collect the rest
             if len(to_get) > 0:
-                stm = session.query(Measurement.data, Object.entity_id, Measurement.ID).join(Object).filter(
+                stm = session.query(Measurement.data, Object.entity_id, Measurement.ID, Measurement.experiment_ID).join(Object).filter(
                     Measurement.ID.in_(to_get))
                 stmall = stm.all()
                 # Format from DB
                 db_data = [np.array(i[0]).squeeze() for i in stmall]
                 entity = [i[1] for i in stmall]
                 db_id = [i[2] for i in stmall]
+                exp_id = [i[3] for i in stmall]
                 # Convert to a dataframe
-                to_return = pd.DataFrame(data={'db_id': db_id, 'entity': entity, 'data': db_data}, index=entity)
+                to_return = pd.DataFrame(
+                    data={'db_id': db_id, 'entity': entity, 'experiment_id': exp_id, 'data': db_data},
+                    index=entity)
             else:
-                to_return = pd.DataFrame(columns=['db_id', 'entity', 'data'])
+                to_return = pd.DataFrame(columns=['db_id', 'entity','experiment_id', 'data'])
             if self._use_cache:
                 # Update cache
                 self._db_cache.update(to_return['db_id'].to_numpy(), to_return)
@@ -434,3 +448,62 @@ class PostProcess:
 
     def collect_as_matrix(self):
         return np.stack(self.collect()['processed'])
+
+
+#################################################################
+#   Experimental metadata
+#   TODO: Allow mutable metadata - addition to database
+#################################################################
+
+class ExperimentMetadata(Mapping):
+    """Container for experimental metadata. Not currently possible to change metadata"""
+    experiment_id = None
+    _int = {}
+
+    def __getitem__(self, k):
+        return self._int[k]
+
+    def __len__(self) -> int:
+        return len(self._int)
+
+    def __iter__(self):
+        pass
+
+    def __repr__(self):
+        return repr(self._int)
+
+    def keys(self):
+        return self._int.keys()
+
+    def load_values(self,experiment_id=None):
+        """Refresh from database"""
+        if experiment_id:
+            self.experiment_id = experiment_id
+        stm = session.query(Metadata.key, Metadata.value)\
+            .filter(Metadata.experiment_id == self.experiment_id).all()
+        # Dictionary comprehension to internal
+        if len(stm) > 0:
+            self._int = {k:v for (k,v) in stm}
+        else:
+            self._int = {}
+
+    def __init__(self, experiment_id = None, measurement_id: int = None):
+        """Initialise the class to either an experimental ID or a measurement ID associated with an experiment."""
+        if experiment_id:
+            if type(experiment_id) in [int, np.int, np.int64]:
+                self.experiment_id = experiment_id
+            elif type(experiment_id) is pd.DataFrame:
+                self.experiment_id = experiment_id.experiment_id.iloc[0]
+            else:
+                raise KeyError("Experiment ID should be an integer or a dataframe")
+
+        elif measurement_id:
+            eid = session.query(Measurement.experiment_ID).filter(Measurement.ID == measurement_id).all()
+            if len(eid) == 1:
+                self.experiment_id = eid[0]
+            else:
+                raise ValueError('Could not find unique experiment associated with measurement ID')
+        else:
+            raise KeyError('Must pass experiment ID or measurement ID to associate with the meta-information')
+        # Send to load
+        self.load_values()

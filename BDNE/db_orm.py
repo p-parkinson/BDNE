@@ -19,6 +19,7 @@ from sqlalchemy import create_engine
 
 # Matlab serialise for numpy->matlab and matlab->numpy conversion
 from BDNE.matlab_serialise import serialise, deserialise
+import numpy as np
 
 # Create base autoloader
 decBase = declarative_base()
@@ -52,6 +53,9 @@ class MATLAB(types.TypeDecorator):
             value = bytes(value, 'utf-8')
         elif value is not None:
             value = bytes(value)
+        # Check for empty data
+        if len(value) == 0:
+            return np.empty(0)
         # Check for compression
         if value[0] == 201:
             # Dataset is compressed. Cut first value, decompress with zlib
@@ -84,7 +88,7 @@ class Metadata(decBase):
     ID = Column(Integer, primary_key=True, autoincrement=True)
     experiment_id = Column(Integer, ForeignKey('experiment.ID'))
     key = Column(Text(length=255))
-    value = Column(Text(length=65535))
+    value = Column(MATLAB)
 
     experiment = relationship('Experiment', back_populates='meta')
 
