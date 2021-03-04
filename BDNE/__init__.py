@@ -21,11 +21,16 @@ config.read(package_directory / 'config.ini')
 #####################################################
 # Connect to database
 #####################################################
-def reconnect():
-    return connect(config.get('DATABASE', 'server'),
-                   config.get('DATABASE', 'port'),
-                   config.get('DATABASE', 'user'),
-                   config.get('DATABASE', 'pass'))
+def connect_database(server: str = "", port: str = "", user: str = "", passwd: str = ""):
+    if len(server) == 0:
+        server = config.get('DATABASE', 'server')
+    if len(port) == 0:
+        port = config.get('DATABASE', 'port')
+    if len(user) == 0:
+        user = config.get('DATABASE', 'user')
+    if len(passwd) == 0:
+        passwd = config.get('DATABASE', 'pass')
+    return connect(server=server, port=port, user=user, password=passwd)
 
 
-session = reconnect()
+session = connect_database()
