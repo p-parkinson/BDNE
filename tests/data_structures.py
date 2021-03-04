@@ -23,7 +23,7 @@ print(wire.experiments())
 
 ##############
 # Get all wire lengths
-spectra = w.get('spectra')
+spectra = w.get_measurement('spectra')
 # State how many obtained
 print('Obtained measurement set with {} measurements'.format(len(spectra)))
 # Add a post-process sum onto the spectra
