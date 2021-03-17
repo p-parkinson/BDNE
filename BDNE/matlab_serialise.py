@@ -37,9 +37,9 @@ def deserialise(input_bytes: bytes, return_cursor: bool = False):
         # Get the length of each dimension
         dims = np.frombuffer(input_bytes[2:(2 + number_of_dimensions * 4)], 'uint32')
         # Move the cursor forwards
-        cursor = 2 + number_of_dimensions * 4
+        cursor = np.int(2 + number_of_dimensions * 4)
         # Work out how many data bytes are required
-        number_of_bytes = sz * np.prod(dims)
+        number_of_bytes = np.int(sz * np.prod(dims))
         # Get data from buffer
         dt = np.frombuffer(input_bytes[cursor:(cursor + number_of_bytes)], classes[input_bytes[0] - 17])
         # Change the shape of the array as appropriate
@@ -53,7 +53,7 @@ def deserialise(input_bytes: bytes, return_cursor: bool = False):
         field_name_lengths = np.frombuffer(
             input_bytes[5:(5 + number_of_fields * 4)], dtype='uint32', count=number_of_fields)
         # Move cursor
-        cursor = (5 + number_of_fields * 4)
+        cursor = np.int(5 + number_of_fields * 4)
         # Get the actual field name characters
         field_name_chars = input_bytes[cursor:cursor + sum(field_name_lengths)]
         # Move cursor
