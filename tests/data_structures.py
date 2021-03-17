@@ -3,11 +3,16 @@
 
 import matplotlib.pyplot as plt
 import numpy as np
-from BDNE import data_structures
+from BDNE import connect_big_query, connect_mysql
+from BDNE.data_structures import *
+
+# Choose connection type
+#connect_big_query()
+connect_mysql()
 
 ####################################################################
 # Set up a wire collection
-w = data_structures.WireCollection()
+w = WireCollection()
 # Populate from the database, EntityGroup 3
 w.load_entity_group(3)
 # List how many wires samples
@@ -27,8 +32,8 @@ spectra = w.get_measurement('spectra')
 # State how many obtained
 print('Obtained measurement set with {} measurements'.format(len(spectra)))
 # Add a post-process sum onto the spectra
-PL = data_structures.PostProcess(spectra)
-pkpos = data_structures.PostProcess(spectra)
+PL = PostProcess(spectra)
+pkpos = PostProcess(spectra)
 PL.set_function(np.sum)
 pkpos.set_function(np.argmax)
 ####################################################################

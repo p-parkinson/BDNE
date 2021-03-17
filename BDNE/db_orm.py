@@ -23,14 +23,25 @@ import numpy as np
 
 # Create base autoloader
 decBase = declarative_base()
+# Global session container
+import BDNE.config
 
 
 ############################################################################
 # Custom class for data in database
 ############################################################################
-def connect(server: str, port: str, user: str, password: str) -> Session:
-    engine = create_engine('mysql+mysqlconnector://%s:%s@%s:%s/bdne' % (user, password, server, port))
-    return Session(engine)
+def connect(big_query=None, mysql=None) -> Session:
+    # Test with bigquery
+    if big_query is not None:
+        engine = create_engine(big_query['bigquery_uri'],
+                               credentials_path=big_query['credentials_path'])
+    elif mysql is not None:
+        engine = create_engine('mysql+mysqlconnector://%s:%s@%s:%s/bdne' %
+                               (mysql['user'], mysql['password'], mysql['server'], mysql['port']))
+    else:
+        raise()
+    BDNE.config.session = Session(engine)
+    return BDNE.config.session
 
 
 ############################################################################
@@ -160,3 +171,11 @@ class EntityGroupEntity(decBase):
 
     entityGroup = relationship('EntityGroup', back_populates='entities')
     entities = relationship('Entity', back_populates='entityGroup')
+
+
+class Collections(decBase):
+    """Collections"""
+    __tablename__ = 'collections'
+    collectionID = Column(String, primary_key=True)
+    dbID = Column(Integer)
+    created = Column(DateTime, default=datetime.now())

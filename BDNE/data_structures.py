@@ -19,7 +19,23 @@ from collections.abc import Mapping
 
 # Import for database
 from BDNE.db_orm import *
-from BDNE import session
+import BDNE.config as cfg
+
+
+#################################################################
+#   A helper for creating tables on Collection
+#################################################################
+def create_collection(database_ids: List[int]) -> String:
+    if cfg.session.bind.dialect.name == 'bigquery':
+        # Generate a random UID
+        uid = cfg.session.execute('SELECT GENERATE_UUID();').first()[0]
+        # Create a statement to insert
+        stmt = f'INSERT primary.collections (collectionID, dbID,created) SELECT "{uid}", x,' \
+               f'current_timestamp() FROM UNNEST({database_ids}) as x; '
+        cfg.session.execute(stmt)
+    else:
+        uid = ''
+    return uid
 
 
 #################################################################
@@ -96,15 +112,15 @@ class Wire:
     def sample(self) -> Dict[str, str]:
         """Return sample ID"""
         if self._sample_id is None:
-            self._sample_id = session.query(Entity.sampleID).filter(Entity.ID == self.db_id).first()[0]
-        stm = session.query(Sample.ID, Sample.supplier, Sample.material, Sample.preparation_date,
+            self._sample_id = cfg.session.query(Entity.sampleID).filter(Entity.ID == self.db_id).first()[0]
+        stm = cfg.session.query(Sample.ID, Sample.supplier, Sample.material, Sample.preparation_date,
                             Sample.preparation_method, Sample.substrate).filter(Sample.ID == self._sample_id).first()
         keys = ['ID', 'Supplier', 'Material', 'Preparation_date', 'Preparation_method', 'Substrate']
         return dict(zip(keys, stm))
 
     def populate_from_db(self) -> None:
         """Retrieve all experiments associated with this nanowire ID"""
-        stm = session.query(Experiment.type, Measurement.ID).join(Measurement).join(Object).join(Entity).filter(
+        stm = cfg.session.query(Experiment.type, Measurement.ID).join(Measurement).join(Object).join(Entity).filter(
             Entity.ID == self.db_id)
         if not stm.all():
             raise KeyError('No Entity exists with ID {}'.format(self.db_id))
@@ -136,7 +152,7 @@ class Wire:
         else:
             raise TypeError('Experiment must be defined as an integer or a string')
         # Retrieve experiment results from database
-        stm = session.query(Measurement.data).filter(Measurement.ID == exp_id)
+        stm = cfg.session.query(Measurement.data).filter(Measurement.ID == exp_id)
         if len(stm.all()) == 1:
             return stm.all()[0][0]
         else:
@@ -156,10 +172,14 @@ class WireCollection:
 
     db_ids: List[int] = []
     cursor: int = -1
+    uid: String = ""
 
     def __repr__(self) -> str:
         """Representation"""
-        return "{} IDs={}".format(self.__class__.__name__, len(self.db_ids))
+        if self.db_ids:
+            return "{} IDs={}".format(self.__class__.__name__, len(self.db_ids))
+        else:
+            return f'Empty {self.__class__.__name__}'
 
     def __init__(self, start_id: List[int] = None) -> None:
         """Set up wire collection, either blank or with a set of initial entity IDs."""
@@ -169,9 +189,13 @@ class WireCollection:
         """The number of wires in this collection"""
         return len(self.db_ids)
 
+    def __del__(self) -> None:
+        if len(self.uid) > 0:
+            Collections.delete().where(Collections.collectionID == self.uid).execute()
+
     def load_sample(self, sample_id: int) -> None:
         """Load a sample ID into the WireCollection class"""
-        stm = session.query(Entity.ID).filter(Entity.sampleID == sample_id)
+        stm = cfg.session.query(Entity.ID).filter(Entity.sampleID == sample_id)
         self.db_ids = [i[0] for i in stm.all()]
         if not self.db_ids:
             raise Warning('No wires found with sample ID {}'.format(sample_id))
@@ -179,7 +203,7 @@ class WireCollection:
     def load_entity_group(self, entity_group_id: int) -> None:
         """Load an entityGroup ID into the WireCollection class"""
         # TODO: implement entity_group loading
-        stm = session.query(EntityGroupEntity.entityID).filter(EntityGroup.ID == entity_group_id)
+        stm = cfg.session.query(EntityGroupEntity.entityID).filter(EntityGroup.ID == entity_group_id)
         self.db_ids = [i[0] for i in stm.all()]
         if not self.db_ids:
             raise Warning('No wires found with sample ID {}'.format(entity_group_id))
@@ -219,13 +243,20 @@ class WireCollection:
 
     def get_measurement(self, experiment_name: str) -> MeasurementCollection:
         """Return a MeasurementCollection (when a string is passed)"""
-        if type(experiment_name) is str:
-            # Return a measurement collection with associated entity (to backreference)
-            stm = session.query(Measurement.ID, Entity.ID).select_from(Measurement). \
-                join(Object).join(Entity).join(Experiment). \
-                filter(Entity.ID.in_(self.db_ids), Experiment.type == experiment_name)
-            ret = stm.all()
-            return MeasurementCollection([i[0] for i in ret], [i[1] for i in ret])
+        # It is more efficient to go via a join than an "in" if over 1000
+        if len(self.uid) == 0:
+            self.uid = create_collection(self.db_ids)
+        # Do query, check which dialect we use
+        if self.uid:
+            sub_query = cfg.session.query(Collections.dbID).filter(Collections.collectionID == self.uid)
+        else:
+            sub_query = self.db_ids
+        # Return a measurement collection with associated entity (to backreference)
+        stm = cfg.session.query(Measurement.ID, Entity.ID).select_from(Measurement). \
+            join(Object).join(Entity).join(Experiment). \
+            filter(Entity.ID.in_(sub_query), Experiment.type == experiment_name)
+        ret = stm.all()
+        return MeasurementCollection([i[0] for i in ret], [i[1] for i in ret])
 
     def __next__(self) -> Wire:
         """To iterate over each wire in the Collection"""
@@ -255,8 +286,10 @@ class MeasurementCollection:
     cursor: int = -1
     _db_cache: DBCache = DBCache()
     _use_cache: bool = True
+    uid: String = ''
 
-    def __init__(self, measurement_ids: Union[np.array, List[int]] = None, entity_ids: Union[np.array, List[int]] = None) -> None:
+    def __init__(self, measurement_ids: Union[np.array, List[int]] = None,
+                 entity_ids: Union[np.array, List[int]] = None) -> None:
         """Initialise with a list of measurement_IDs and entity_ids"""
         if type(measurement_ids) is list:
             if len(measurement_ids) == len(entity_ids):
@@ -272,6 +305,10 @@ class MeasurementCollection:
     def __len__(self) -> int:
         """Return the number of measurements in this collection"""
         return len(self.db_ids)
+
+    def __del__(self) -> None:
+        if len(self.uid) > 0:
+            Collections.delete().where(Collections.collectionID == self.uid).execute()
 
     def sample(self, number: int = 1) -> pd.DataFrame:
         """Get a random selection of k measurements"""
@@ -306,9 +343,15 @@ class MeasurementCollection:
                 cached = None
             # Collect the rest
             if len(to_get) > 0:
-                stm = session.query(Measurement.data, Object.entity_id, Measurement.ID, Measurement.experiment_ID).join(
-                    Object).filter(
-                    Measurement.ID.in_(to_get))
+                # Create entry in temp table
+                if len(self.uid) == 0:
+                    self.uid = create_collection(self.db_ids)
+                if self.uid:
+                    sub_query = cfg.session.query(Collections.dbID).filter(Collections.collectionID == self.uid)
+                else:
+                    sub_query = self.db_ids
+                stm = cfg.session.query(Measurement.data, Object.entity_id, Measurement.ID, Measurement.experiment_ID).\
+                    join(Object).filter(Measurement.ID.in_(sub_query))
                 stmall = stm.all()
                 # Format from DB
                 db_data = [np.array(i[0]).squeeze() for i in stmall]
@@ -489,7 +532,7 @@ class ExperimentMetadata(Mapping):
         """Refresh from database"""
         if experiment_id:
             self.experiment_id = experiment_id
-        stm = session.query(Metadata.key, Metadata.value) \
+        stm = cfg.session.query(Metadata.key, Metadata.value) \
             .filter(Metadata.experiment_id == self.experiment_id).all()
         # Dictionary comprehension to internal
         if len(stm) > 0:
@@ -507,7 +550,7 @@ class ExperimentMetadata(Mapping):
             else:
                 raise KeyError("Experiment ID should be an integer or a dataframe")
         elif measurement_id:
-            eid = session.query(Measurement.experiment_ID).filter(Measurement.ID == measurement_id).all()
+            eid = cfg.session.query(Measurement.experiment_ID).filter(Measurement.ID == measurement_id).all()
             if len(eid) == 1:
                 self.experiment_id = eid[0]
             else:

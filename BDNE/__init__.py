@@ -7,6 +7,8 @@ import configparser
 import pathlib
 # Connect to database
 from BDNE.db_orm import connect
+import BDNE.config as cfg
+
 
 #####################################################
 # Get database configuration
@@ -21,7 +23,7 @@ config.read(package_directory / 'config.ini')
 #####################################################
 # Connect to database
 #####################################################
-def connect_database(server: str = "", port: str = "", user: str = "", passwd: str = ""):
+def connect_mysql(server: str = "", port: str = "", user: str = "", passwd: str = "") :
     if len(server) == 0:
         server = config.get('DATABASE', 'server')
     if len(port) == 0:
@@ -30,7 +32,14 @@ def connect_database(server: str = "", port: str = "", user: str = "", passwd: s
         user = config.get('DATABASE', 'user')
     if len(passwd) == 0:
         passwd = config.get('DATABASE', 'pass')
-    return connect(server=server, port=port, user=user, password=passwd)
+    cfg.session = connect(mysql={'server': server, 'port': port,
+                             'user': user, 'password': passwd})
 
 
-session = connect_database()
+def connect_big_query(credentials_json: str = ""):
+    if len(credentials_json) == 0:
+        credentials_json = package_directory / 'bdne_bigquery.json'
+    cfg.session = connect(big_query={'bigquery_uri': 'bigquery://bdne-307813/primary',
+                                     'credentials_path': credentials_json})
+
+#connect_big_query()
