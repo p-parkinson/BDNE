@@ -258,7 +258,7 @@ class WireCollection:
         """Return a MeasurementCollection (when a string is passed)"""
         # It is more efficient to go via a join than an "in" if over 1000
         if len(self.uid) == 0:
-            self.uid = create_collection(self.db_ids)
+            self.uid = create_collection(self.uid,self.db_ids)
         # Do query, check which dialect we use
         if self.uid:
             sub_query = cfg.session.query(Collections.dbID).filter(Collections.collectionID == self.uid)
@@ -359,7 +359,7 @@ class MeasurementCollection:
             if len(to_get) > 0:
                 # Create entry in temp table
                 if len(self.uid) == 0:
-                    self.uid = create_collection(self.db_ids)
+                    self.uid = create_collection(self.uid,self.db_ids)
                 if self.uid:
                     sub_query = cfg.session.query(Collections.dbID).filter(Collections.collectionID == self.uid)
                 else:
