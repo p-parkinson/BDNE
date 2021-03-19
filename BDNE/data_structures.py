@@ -20,6 +20,7 @@ from collections.abc import Mapping
 # Import for database
 from BDNE.db_orm import *
 import BDNE.config as cfg
+from sqlalchemy import delete as SQLdelete
 
 
 #################################################################
@@ -191,7 +192,8 @@ class WireCollection:
 
     def __del__(self) -> None:
         if len(self.uid) > 0:
-            Collections.delete().where(Collections.collectionID == self.uid).execute()
+            stmt = SQLdelete(Collections).where(Collections.collectionID == self.uid)
+            cfg.session.execute(stmt)
 
     def load_sample(self, sample_id: int) -> None:
         """Load a sample ID into the WireCollection class"""
@@ -308,7 +310,8 @@ class MeasurementCollection:
 
     def __del__(self) -> None:
         if len(self.uid) > 0:
-            Collections.delete().where(Collections.collectionID == self.uid).execute()
+            stmt = SQLdelete(Collections).where(Collections.collectionID == self.uid)
+            cfg.session.execute(stmt)
 
     def sample(self, number: int = 1) -> pd.DataFrame:
         """Get a random selection of k measurements"""
