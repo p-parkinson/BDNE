@@ -42,6 +42,7 @@ def create_collection(uid: str, database_ids: List[int]) -> String:
                 database_ids = database_ids[10000:]
             else:
                 to_insert = database_ids
+                database_ids = []
             stmt = f'INSERT primary.collections (collectionID, dbID,created) SELECT "{uid}", x,' \
                    f'current_timestamp() FROM UNNEST({to_insert}) as x; '
             cfg.session.execute(stmt)
