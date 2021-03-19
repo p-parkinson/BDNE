@@ -26,14 +26,25 @@ from sqlalchemy import delete as SQLdelete
 #################################################################
 #   A helper for creating tables on Collection
 #################################################################
-def create_collection(database_ids: List[int]) -> String:
+def create_collection(uid: str, database_ids: List[int]) -> String:
     if cfg.session.bind.dialect.name == 'bigquery':
-        # Generate a random UID
-        uid = cfg.session.execute('SELECT GENERATE_UUID();').first()[0]
-        # Create a statement to insert
-        stmt = f'INSERT primary.collections (collectionID, dbID,created) SELECT "{uid}", x,' \
-               f'current_timestamp() FROM UNNEST({database_ids}) as x; '
-        cfg.session.execute(stmt)
+        if len(uid) == 0:
+            # Generate fresh UID
+            uid = cfg.session.execute('SELECT GENERATE_UUID();').first()[0]
+        else:
+            # Clear existing data
+            stmt = SQLdelete(Collections).where(Collections.collectionID == uid)
+            cfg.session.execute(stmt)
+        # Create a statement to insert, being careful of the 1MB limit
+        while len(database_ids) > 0:
+            if len(repr(database_ids)) > 1000000:
+                to_insert = database_ids[0:10000]
+                database_ids = database_ids[10000:]
+            else:
+                to_insert = database_ids
+            stmt = f'INSERT primary.collections (collectionID, dbID,created) SELECT "{uid}", x,' \
+                   f'current_timestamp() FROM UNNEST({to_insert}) as x; '
+            cfg.session.execute(stmt)
     else:
         uid = ''
     return uid
