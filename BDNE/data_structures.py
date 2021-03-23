@@ -40,7 +40,7 @@ def create_collection(uid: str, database_ids: List[int]) -> String:
         else:
             raise(RuntimeError('Unknown database type'))
     else:
-        # We have been passed a uid - clear existing data
+        # We have been passed a _uid - clear existing data
         stmt = SQLdelete(Collections).where(Collections.collectionID == uid)
         cfg.session.execute(stmt)
     # We next insert the provided list of database ids
@@ -71,6 +71,7 @@ def create_collection(uid: str, database_ids: List[int]) -> String:
 
 class DBCache:
     """A basic cache class for database IDs- never kicks out old data unless told to"""
+    # Store the data in pd.DataFrame
     _cache: pd.DataFrame
 
     def __init__(self) -> None:
@@ -86,17 +87,18 @@ class DBCache:
         return self.check(ids)
 
     def check(self, ids: List[int]) -> Tuple[List[int], pd.DataFrame]:
-        """Look for hits with ids, must be unique"""
+        """Look for hits with supplied ids, must be unique index"""
         if len(ids) == 0:
             return [], pd.DataFrame()
         ids = np.array(ids)
         # Get from cache
         cached = self._cache[self._cache.index.isin(ids)]
         # List unfound items to be read in
-        unfound: List[int] = np.setdiff1d(ids, cached.index.to_numpy()).tolist()
+        unfound = np.setdiff1d(ids, cached.index.to_numpy()).tolist()
         return unfound, cached
 
     def update(self, ids: np.Array, data: pd.DataFrame) -> None:
+        """Update the cache for the ids provided with the data provided"""
         # Convert to integer
         ids = ids.astype('int')
         # Make sure not to update existing data
@@ -110,6 +112,7 @@ class DBCache:
         data.index = oldidx
 
     def __len__(self) -> pd.Series:
+        """Return the amount of memory used by the cache."""
         return self._cache.memory_usage(deep=True)
 
 
@@ -117,51 +120,60 @@ class DBCache:
 #   A single wire class
 #################################################################
 class Wire:
-    """All data for a unique single element."""
+    """Class to store all of the data for a given entity.
+        Typical Usage:
+        w = Wire(1000);
+        print(w);"""
+    # The database ID of this entity
     db_id: int = None
+    # The sample ID (with additional information about the wider sample the entity is from)
     _sample_id: int = None
+    # An internal container for the experimental data associated with this object
     experiment_container = []
 
     def __repr__(self) -> str:
-        """Representation"""
+        """Return information about this entity, including all experiments (if cached)."""
         r = "{} ID={}".format(self.__class__.__name__, self.db_id)
         if len(self.experiment_container) > 0:
             r += " {}".format([i[0] for i in self.experiment_container])
         return r
 
     def __init__(self, db_id: int = None) -> None:
-        """Initialise the wire class as empty or with a db_id."""
+        """Initialise the wire class as empty, or with an entity id."""
         if db_id is None:
             return
         # ID given
         self.db_id = db_id
 
     def sample(self) -> Dict[str, str]:
-        """Return sample ID"""
+        """Return data about the sample that this entity is associated with."""
         if self._sample_id is None:
             self._sample_id = cfg.session.query(Entity.sampleID).filter(Entity.ID == self.db_id).first()[0]
+        # Set up database query to retrieve
         stm = cfg.session.query(Sample.ID, Sample.supplier, Sample.material, Sample.preparation_date,
                             Sample.preparation_method, Sample.substrate).filter(Sample.ID == self._sample_id).first()
+        # Zip to dictionary
         keys = ['ID', 'Supplier', 'Material', 'Preparation_date', 'Preparation_method', 'Substrate']
         return dict(zip(keys, stm))
 
     def populate_from_db(self) -> None:
-        """Retrieve all experiments associated with this nanowire ID"""
-        stm = cfg.session.query(Experiment.type, Measurement.ID).join(Measurement).join(Object).join(Entity).filter(
-            Entity.ID == self.db_id)
+        """Retrieve all experiments associated with this entity ID"""
+        stm = cfg.session.query(Experiment.type, Measurement.ID).join(Measurement).join(Object).join(Entity).\
+            filter(Entity.ID == self.db_id)
+        # Check whether this entity exists
         if not stm.all():
             raise KeyError('No Entity exists with ID {}'.format(self.db_id))
         self.experiment_container = stm.all()
 
     def experiments(self) -> List[str]:
-        """List all experiments in this wire"""
+        """List all experiments associated with this entity"""
         if not self.experiment_container:
             self.populate_from_db()
         return [i[0] for i in self.experiment_container]
 
     # TODO: Find type hint for sqlalchemy session.query
-    def get(self, experiment):
-        """Get a single experiment associated with this wire by experiment number or name"""
+    def get(self, experiment: Union[int, str]):
+        """Get a single experiment associated with this entity by experiment number or name"""
         # Check if we have downloaded experiment list yet
         if not self.experiment_container:
             self.populate_from_db()
@@ -170,6 +182,7 @@ class Wire:
             exp_id = self.experiment_container[experiment][1]
         elif type(experiment) is str:
             exp_id = [i[1] for i in self.experiment_container if i[0] == experiment]
+            # Check how many datasets are associated with this
             if len(exp_id) == 0:
                 raise KeyError('Experiment {} not present for wire ID {}'.format(experiment, self.db_id))
             elif len(exp_id) == 1:
@@ -191,18 +204,22 @@ class Wire:
 #################################################################
 
 class WireCollection:
-    """A collection of elements.
-    Lazy handling, stores only db_ids for the wires and returns either a wire, a set of wires, or a set of measurements.
+    """A collection of entities.
+    Lazy handling, stores only db_ids for the entities and returns either an entity, a set of entities,
+    or a set of measurements.
       Typical usage:
       ``w = WireCollection();
       w.load_sample(25);``"""
 
+    # Database IDs associated with entities in this set
     db_ids: List[int] = []
+    # Cursor to use as iterator
     cursor: int = -1
-    uid: String = ""
+    # Unique ID associated with this collection in the Collections table
+    _uid: String = ""
 
     def __repr__(self) -> str:
-        """Representation"""
+        """Return string describing collection"""
         if self.db_ids:
             return "{} IDs={}".format(self.__class__.__name__, len(self.db_ids))
         else:
@@ -213,12 +230,13 @@ class WireCollection:
         self.db_ids = start_id
 
     def __len__(self) -> int:
-        """The number of wires in this collection"""
+        """The number of entities in this collection"""
         return len(self.db_ids)
 
     def __del__(self) -> None:
-        if len(self.uid) > 0:
-            stmt = SQLdelete(Collections).where(Collections.collectionID == self.uid)
+        # Clear up the data in collections
+        if len(self._uid) > 0:
+            stmt = SQLdelete(Collections).where(Collections.collectionID == self._uid)
             cfg.session.execute(stmt)
 
     def load_sample(self, sample_id: int) -> None:
@@ -230,17 +248,17 @@ class WireCollection:
 
     def load_entity_group(self, entity_group_id: int) -> None:
         """Load an entityGroup ID into the WireCollection class"""
-        # TODO: implement entity_group loading
         stm = cfg.session.query(EntityGroupEntity.entityID).filter(EntityGroup.ID == entity_group_id)
         self.db_ids = [i[0] for i in stm.all()]
+        # Check if any entities are returned
         if not self.db_ids:
             raise Warning('No wires found with sample ID {}'.format(entity_group_id))
 
     def sample(self, number_to_sample: int = 0) -> Union[Wire, WireCollection]:
         """Return a random subset of k entities from the WireCollection."""
-        # TODO: Deal with different return types
         if number_to_sample > 0:
             wid = random.choices(self.db_ids, k=number_to_sample)
+            # Select - return either a Wire or a WireCollection
             if len(wid) == 1:
                 return Wire(wid[0])
             else:
@@ -255,8 +273,8 @@ class WireCollection:
         if type(id_set) is MeasurementCollection:
             id_set = id_set.entity_ids
         else:
-            raise TypeError('Mask must be passed either a MeasurementCollection or another WireCollection')
-        # Create an intersection (where
+            raise TypeError('Mask must be passed as either a MeasurementCollection or another WireCollection')
+        # Create an intersection between the local IDs and the remote ID set
         intersection = set(self.db_ids).intersection(id_set)
         return WireCollection(list(intersection))
 
@@ -266,35 +284,39 @@ class WireCollection:
         return WireCollection(new_ids)
 
     def get_wire(self, wire_id: int) -> Wire:
-        """Return either a single entity (when enumerated)"""
+        """Return a single entity"""
         return Wire(self.db_ids[wire_id])
 
     def get_measurement(self, experiment_name: str) -> MeasurementCollection:
         """Return a MeasurementCollection (when a string is passed)"""
         # It is more efficient to go via a join than an "in" if over 1000
-        if len(self.uid) == 0:
-            self.uid = create_collection(self.uid,self.db_ids)
-        # Do query, check which dialect we use
-        if self.uid:
-            sub_query = cfg.session.query(Collections.dbID).filter(Collections.collectionID == self.uid)
+        if len(self._uid) == 0:
+            self._uid = create_collection(self._uid, self.db_ids)
+        # Do query if a _uid is available
+        if self._uid:
+            sub_query = cfg.session.query(Collections.dbID).filter(Collections.collectionID == self._uid)
         else:
             sub_query = self.db_ids
         # Return a measurement collection with associated entity (to backreference)
         stm = cfg.session.query(Measurement.ID, Entity.ID).select_from(Measurement). \
             join(Object).join(Entity).join(Experiment). \
             filter(Entity.ID.in_(sub_query), Experiment.type == experiment_name)
+        # Execute
         ret = stm.all()
-        return MeasurementCollection([i[0] for i in ret], [i[1] for i in ret])
+        # Return
+        return MeasurementCollection(measurement_ids=[i[0] for i in ret], entity_ids=[i[1] for i in ret])
 
     def __next__(self) -> Wire:
-        """To iterate over each wire in the Collection"""
+        """To iterate over each entity in the Collection"""
         self.cursor = self.cursor + 1
+        # Check for end of list
         if self.cursor == len(self.db_ids):
             self.cursor = 0
             raise StopIteration()
         return self.get_wire(self.cursor)
 
     def __iter__(self) -> WireCollection:
+        # Return self
         return self
 
     def __add__(self, other: WireCollection) -> WireCollection:
@@ -308,58 +330,72 @@ class WireCollection:
 
 class MeasurementCollection:
     """A class to hold a collection of related measurement.
-    Uses lazy loading, holding only the database IDs and associated entity IDs until a get() or collect() is issued."""
+    Uses lazy loading, holding only the database IDs and associated entity IDs until a get()
+    or collect() is issued.
+        Typical Usage:
+        w = WireCollection();
+        w.load_entity_group(4);
+        e = w.get_measurement('spectra'); # A MeasurementCollection"""
+    # Database IDs for the measurements
     db_ids: List[int] = []
+    # Associated entity IDs
     entity_ids: List[int] = []
+    # Cursor for use as an iterator
     cursor: int = -1
+    # Internal link to cache
     _db_cache: DBCache = DBCache()
+    # Cache switch
     _use_cache: bool = True
-    uid: String = ''
+    # Internal link to _uid for database
+    _uid: String = ''
 
     def __init__(self, measurement_ids: Union[np.array, List[int]] = None,
                  entity_ids: Union[np.array, List[int]] = None) -> None:
         """Initialise with a list of measurement_IDs and entity_ids"""
-        if type(measurement_ids) is list:
-            if len(measurement_ids) == len(entity_ids):
-                self.db_ids = measurement_ids
-                self.entity_ids = entity_ids
-            else:
-                raise RuntimeError('Both measurement_id and entity_id must be provided with the same length.')
+        if len(measurement_ids) == len(entity_ids):
+            self.db_ids = measurement_ids
+            self.entity_ids = entity_ids
+        else:
+            raise RuntimeError('Both measurement_id and entity_id must be provided with the same length.')
 
     def __repr__(self) -> str:
-        """Representation"""
-        return "{} IDs={}".format(self.__class__.__name__, len(self.db_ids))
+        """Return string representation"""
+        if len(self.db_ids) > 0:
+            return "{} IDs={}".format(self.__class__.__name__, len(self.db_ids))
+        else:
+            return f"Empty {self.__class__.__name__}"
 
     def __len__(self) -> int:
         """Return the number of measurements in this collection"""
         return len(self.db_ids)
 
     def __del__(self) -> None:
-        if len(self.uid) > 0:
-            stmt = SQLdelete(Collections).where(Collections.collectionID == self.uid)
+        # Remove the instance from memory and remove the associated Collection data
+        if len(self._uid) > 0:
+            stmt = SQLdelete(Collections).where(Collections.collectionID == self._uid)
             cfg.session.execute(stmt)
 
     def sample(self, number: int = 1) -> pd.DataFrame:
-        """Get a random selection of k measurements"""
+        """Get a random selection of 'number' measurements"""
         selected = random.choices(range(len(self.db_ids)), k=number)
         return self._get(selected)
 
     def _get(self, n: Union[range, list]) -> pd.DataFrame:
         """A cached function to return measurements from the set."""
-        # Convert ranges
+        # Convert ranges to a list
         if type(n) is range:
             n = list(n)
         # Check if a list passed (must be)
         if type(n) is not list:
             raise NotImplementedError('n must be a list')
-        # Convert to numpy
+        # Convert list to numpy array
         n = np.array(n)
         # Range check
         if np.any(n > len(self.db_ids)) or np.any(n < 0):
             raise KeyError('Index must be in range 0 to {}'.format(len(self.db_ids)))
         # Convert indices to db_ids
         to_get = [self.db_ids[i] for i in n]
-        # Zero length, multiple
+        # If zero length, return empty
         if len(to_get) == 0:
             # Nothing to return
             return pd.DataFrame()
@@ -370,17 +406,19 @@ class MeasurementCollection:
                 (to_get, cached) = self._db_cache.check(to_get)
             else:
                 cached = None
-            # Collect the rest
+            # Collect any remaining datasets rest
             if len(to_get) > 0:
-                # Create entry in temp table
-                if len(self.uid) == 0:
-                    self.uid = create_collection(self.uid,self.db_ids)
-                if self.uid:
-                    sub_query = cfg.session.query(Collections.dbID).filter(Collections.collectionID == self.uid)
+                # Create entry in temporary table
+                if len(self._uid) == 0:
+                    self._uid = create_collection(self._uid, to_get)
+                if self._uid:
+                    sub_query = cfg.session.query(Collections.dbID).filter(Collections.collectionID == self._uid)
                 else:
-                    sub_query = self.db_ids
+                    sub_query = to_get
+                # Assemble the query
                 stm = cfg.session.query(Measurement.data, Object.entity_id, Measurement.ID, Measurement.experiment_ID).\
                     join(Object).filter(Measurement.ID.in_(sub_query))
+                # Collection from database
                 stmall = stm.all()
                 # Format from DB
                 db_data = [np.array(i[0]).squeeze() for i in stmall]
@@ -392,7 +430,9 @@ class MeasurementCollection:
                     data={'db_id': db_id, 'entity': entity, 'experiment_id': exp_id, 'data': db_data},
                     index=entity)
             else:
+                # Empty dataframe from database - all cached
                 to_return = pd.DataFrame(columns=['db_id', 'entity', 'experiment_id', 'data'])
+            # Assemble results from cache and direct database access
             if self._use_cache:
                 # Update cache
                 self._db_cache.update(to_return['db_id'].to_numpy(), to_return)
@@ -404,7 +444,7 @@ class MeasurementCollection:
             return to_return
 
     def collect(self) -> pd.DataFrame:
-        """Get all measurements"""
+        """Get all measurements and return as a dataframe"""
         return self._get(range(len(self.db_ids)))
 
     def collect_as_matrix(self) -> np.array:
@@ -423,7 +463,7 @@ class MeasurementCollection:
             raise TypeError(
                 'Mask must be passed either a list of entity IDs, another MeasurementCollection or a Measurement '
                 'dataframe')
-            # Create an intersection on entity IDs
+        # Create an intersection on entity IDs
         (intersection, id1, id2) = np.intersect1d(self.entity_ids, id_set, return_indices=True)
         # Filter measurement IDs
         measurement_ids = [self.db_ids[i] for i in id1]
@@ -433,6 +473,7 @@ class MeasurementCollection:
     def __next__(self) -> pd.DataFrame:
         """To iterate"""
         self.cursor = self.cursor + 1
+        # Check if final
         if self.cursor == len(self.db_ids):
             self.cursor = 0
             raise StopIteration()
@@ -447,18 +488,31 @@ class MeasurementCollection:
 #################################################################
 
 class PostProcess:
-    """A wrapper around a MeasurementCollection or another PostProcess function to cleanly add line-by-line
-    processing. """
+    """A wrapper around a MeasurementCollection or another PostProcess function to cleanly add
+    line-by-line processing.
+        Typical Usage:
+        w = WireCollection()
+        w.load_entity_group(4)
+        spectra = w.get_measurement('spectra')
+        PL = PostProcess(spectra)
+        PL.set_function(np.sum)"""
+
+    # Define the function type
     function_type = Callable[[pd.Series], Any]
+    # Define the underlying dataset
     mc: Union[PostProcess, MeasurementCollection] = None
+    # Handle to function
     func: function_type = None
+    # Cursor for iterating
     _cursor: int = 0
+    # Column name for the data in the pandas set
     data_column: str = 'data'
 
     def __init__(self, mc: Union[MeasurementCollection, PostProcess] = None) -> None:
         """Initialise the PostProcess class by passing a measurementCollection or a PostProcess class"""
         if type(mc) in [MeasurementCollection, PostProcess]:
             self.mc = mc
+            # If we wrap a MeasurementCollection then base on the "data" column, else on the "processed" column
             if type(mc) is MeasurementCollection:
                 self.data_column = 'data'
             elif type(mc) is PostProcess:
@@ -472,7 +526,7 @@ class PostProcess:
             )
 
     def __repr__(self) -> str:
-        """Representation"""
+        """Represent as string"""
         if self.func:
             function_name = self.func.__name__
         else:
@@ -516,7 +570,9 @@ class PostProcess:
 
     def collect(self) -> pd.DataFrame:
         """Get all measurements"""
+        # Get the underlying data
         to_ret = self.mc.collect()
+        # Return through an "apply" function
         to_ret['processed'] = to_ret.apply(lambda row: self.func(row[self.data_column]), axis=1)
         return to_ret
 
@@ -527,6 +583,7 @@ class PostProcess:
         return to_ret
 
     def collect_as_matrix(self) -> np.array:
+        """Return the full output as a numpy array"""
         return np.stack(self.collect()['processed'])
 
 
@@ -537,24 +594,33 @@ class PostProcess:
 
 class ExperimentMetadata(Mapping):
     """Container for experimental metadata. Not currently possible to change metadata"""
+    # Define type for the value
     value_type = Union[np.array, List[int], int]
+    # Define type for the ID
     id_type = Union[int, np.int, np.int64, pd.DataFrame]
+    # Experimental ID to associated metadata with
     experiment_id: id_type = None
+    # Internal dictionary to store metadata
     _internal_mapping = {}
 
     def __getitem__(self, k: str) -> value_type:
+        """Getter from internal mapping"""
         return self._internal_mapping[k]
 
     def __len__(self) -> int:
+        """Returns number of metadata entries"""
         return len(self._internal_mapping)
 
     def __iter__(self):
+        # Iteration not possible
         pass
 
     def __repr__(self) -> str:
+        """String representation"""
         return repr(self._internal_mapping)
 
     def keys(self):
+        """Return keys of mapping"""
         return self._internal_mapping.keys()
 
     def load_values(self, experiment_id: int = None) -> None:

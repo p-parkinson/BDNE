@@ -3,44 +3,48 @@
 
 # Zlib used for compression for data
 import zlib
+
 # Datetime for column definitions
 from datetime import datetime
 
-import sqlalchemy.types as types
 # Numpy for handling numeric data
-from numpy import ndarray
+import numpy as np
+
+# SQLAlchemy used for database connection
+import sqlalchemy.types as types
 from sqlalchemy import Integer, ForeignKey, Text, String, Column, DateTime
 from sqlalchemy.ext.declarative import declarative_base
-# SQLAlchemy used for database connection
 from sqlalchemy.orm import relationship
-# Create connection to database
 from sqlalchemy.orm import Session
 from sqlalchemy import create_engine
 
 # Matlab serialise for numpy->matlab and matlab->numpy conversion
 from BDNE.matlab_serialise import serialise, deserialise
-import numpy as np
+# Global session container
+import BDNE.config
 
 # Create base autoloader
 decBase = declarative_base()
-# Global session container
-import BDNE.config
 
 
 ############################################################################
 # Custom class for data in database
 ############################################################################
 def connect(big_query=None, mysql=None) -> Session:
+    """Connect to the underlying data source, either via big_query or mysql"""
     # Test with bigquery
     if big_query is not None:
         engine = create_engine(big_query['bigquery_uri'],
                                credentials_path=big_query['credentials_path'])
+    # Test with mysql
     elif mysql is not None:
         engine = create_engine('mysql+mysqlconnector://%s:%s@%s:%s/bdne' %
                                (mysql['user'], mysql['password'], mysql['server'], mysql['port']))
     else:
-        raise()
+        raise(KeyError('Must specify either big_query or mysql configuration.'))
+    # Create session
     BDNE.config.session = Session(engine)
+    # Return session
     return BDNE.config.session
 
 
@@ -51,26 +55,36 @@ def connect(big_query=None, mysql=None) -> Session:
 # Set up serialise/deserialise
 class MATLAB(types.TypeDecorator):
     """Converts to and from hlp_serialised MATLAB form on the fly"""
+
+    # Define underlying data type
     impl = types.String
 
     def process_bind_param(self, value, dialect):
+        """Run serialise (forward)"""
         return serialise(value)
 
-    def process_result_value(self, value, dialect) -> ndarray:
+    def process_result_value(self, value, dialect) -> np.ndarray:
+        """Run deserialise (backwards)"""
         # Fix for odd error in LargeBinary (see
         # https://github.com/sqlalchemy/sqlalchemy/issues/5073#issuecomment-582953477)
         # where incorrect encoding appears
+
         if isinstance(value, str):
+            # Encode as utf-8
             value = bytes(value, 'utf-8')
         elif value is not None:
+            # Encode as bytes
             value = bytes(value)
+
         # Check for empty data
         if len(value) == 0:
             return np.empty(0)
+
         # Check for compression
         if value[0] == 201:
             # Dataset is compressed. Cut first value, decompress with zlib
             value = zlib.decompress(value[1:])
+
         # Deserialise via MATLAB
         value = deserialise(value)
         return value
