@@ -1,53 +1,67 @@
 # Definition of data structures for BDNE project
 # Author : Patrick Parkinson <patrick.parkinson@manchester.ac.uk>
 
-# For type annotation
+# Imports for type-annotations
 from __future__ import annotations
 from typing import Tuple, List, Dict, Union, Callable, Any
 
-# For sampling from set
+# Import random to sample from the sets
 import random
 
-# For conversion
+# Import numpy as part of the type-annotations
 import numpy as np
 
-# For datasets
+# Import pandas to output the data as a dataframe
 import pandas as pd
 
-# For Experimental metadata as a mapping
+# Import Mapping to implement the experimental metadata as a mapping class
 from collections.abc import Mapping
 
-# Import for database
+# Import the core BDNE ORM and configuration to deal with the database
 from BDNE.db_orm import *
 import BDNE.config as cfg
-from sqlalchemy import delete as SQLdelete
+from sqlalchemy import delete as SQLdelete, insert as SQLinsert
 
 
 #################################################################
-#   A helper for creating tables on Collection
+#   A helper for creating temporary lists of database IDs on Collection
 #################################################################
 def create_collection(uid: str, database_ids: List[int]) -> String:
-    if cfg.session.bind.dialect.name == 'bigquery':
-        if len(uid) == 0:
-            # Generate fresh UID
+    """Create a collection of database IDs in the Collections table of the database. This function creates
+    a table of database ID values linked to a unique key, allowing to select against very large sets."""
+    # The databases used typically have a 1MB limit for query size, which is easy to run into
+
+    if len(uid) == 0:
+        # Generate fresh UID : if we are connected to biquery we can use GENERATE_UUID, if mysql then "UUID"
+        if cfg.session.bind.dialect.name == 'bigquery':
             uid = cfg.session.execute('SELECT GENERATE_UUID();').first()[0]
+        elif cfg.session.bind.dialect.name == 'mysql':
+            uid = cfg.session.execute('SELECT UUID();').first()[0]
         else:
-            # Clear existing data
-            stmt = SQLdelete(Collections).where(Collections.collectionID == uid)
-            cfg.session.execute(stmt)
-        # Create a statement to insert, being careful of the 1MB limit
-        while len(database_ids) > 0:
-            if len(repr(database_ids)) > 1000000:
-                to_insert = database_ids[0:10000]
-                database_ids = database_ids[10000:]
-            else:
-                to_insert = database_ids
-                database_ids = []
+            raise(RuntimeError('Unknown database type'))
+    else:
+        # We have been passed a uid - clear existing data
+        stmt = SQLdelete(Collections).where(Collections.collectionID == uid)
+        cfg.session.execute(stmt)
+    # We next insert the provided list of database ids
+    # We need to be mindful of the 1MB SQL limit
+    while len(database_ids) > 0:
+        # Pop the first max_inserts from the list and insert into database
+        max_inserts = 10000 if (cfg.session.bind.dialect.name == 'bigquery') else 10000
+        if len(database_ids) > max_inserts:
+            to_insert = database_ids[0:max_inserts]
+            database_ids = database_ids[max_inserts:]
+        else:
+            to_insert = database_ids
+            database_ids = []
+        # Create an insert statement. This can be quite efficient with bigquery using unnest.
+        if cfg.session.bind.dialect.name == 'bigquery':
             stmt = f'INSERT primary.collections (collectionID, dbID,created) SELECT "{uid}", x,' \
                    f'current_timestamp() FROM UNNEST({to_insert}) as x; '
             cfg.session.execute(stmt)
-    else:
-        uid = ''
+        elif cfg.session.bind.dialect.name == 'mysql':
+            to_insert = [{'collectionID':uid, 'dbID':y} for y in to_insert]
+            cfg.session.execute(SQLinsert(Collections), to_insert)
     return uid
 
 
@@ -56,11 +70,11 @@ def create_collection(uid: str, database_ids: List[int]) -> String:
 #################################################################
 
 class DBCache:
-    """A simple cache class - never kicks out old data unless told to"""
+    """A basic cache class for database IDs- never kicks out old data unless told to"""
     _cache: pd.DataFrame
 
     def __init__(self) -> None:
-        """Set up pandas dataframe to store data"""
+        """Set up pandas dataframe to store data internally"""
         self._cache = pd.DataFrame()
 
     def clear(self) -> None:
@@ -68,7 +82,7 @@ class DBCache:
         self._cache = pd.DataFrame()
 
     def __call__(self, ids: List[int]) -> Tuple[List[int], pd.DataFrame]:
-        """Convenience function"""
+        """Convenience function to retrieve a list of results"""
         return self.check(ids)
 
     def check(self, ids: List[int]) -> Tuple[List[int], pd.DataFrame]:

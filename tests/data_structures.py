@@ -14,7 +14,7 @@ connect_mysql()
 # Set up a wire collection
 w = WireCollection()
 # Populate from the database, EntityGroup 3
-w.load_entity_group(3)
+w.load_entity_group(4)
 # List how many wires samples
 print('Wire Collection has {} wires'.format(len(w.db_ids)))
 
