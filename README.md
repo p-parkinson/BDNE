@@ -47,7 +47,7 @@ These should be used for handling data and processing, and connect into the ```d
 
 ### Example code ###
 
-Basic functionality can be produced using the example code provided in ```tests/data_structures.py```. 
+Basic functionality can be produced using the example code provided in ```BDNE_example_code.py```. 
 A typical workflow might be:
 
 ```python
