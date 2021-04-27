@@ -18,7 +18,7 @@ import pandas as pd
 from collections.abc import Mapping
 
 # Import the core BDNE ORM and configuration to deal with the database
-from BDNE.db_orm import *
+import BDNE.db_orm as db
 import BDNE.config as cfg
 from sqlalchemy import delete as SQLdelete, insert as SQLinsert
 
@@ -26,7 +26,7 @@ from sqlalchemy import delete as SQLdelete, insert as SQLinsert
 #################################################################
 #   A helper for creating temporary lists of database IDs on Collection
 #################################################################
-def create_collection(uid: str, database_ids: List[int]) -> String:
+def create_collection(uid: str, database_ids: List[int]) -> str:
     """Create a collection of database IDs in the Collections table of the database. This function creates
     a table of database ID values linked to a unique key, allowing to select against very large sets."""
     # The databases used typically have a 1MB limit for query size, which is easy to run into
@@ -41,7 +41,7 @@ def create_collection(uid: str, database_ids: List[int]) -> String:
             raise (RuntimeError('Unknown database type'))
     else:
         # We have been passed a _uid - clear existing data
-        stmt = SQLdelete(Collections).where(Collections.collectionID == uid)
+        stmt = SQLdelete(db.Collections).where(db.Collections.collectionID == uid)
         cfg.session.execute(stmt)
     # We next insert the provided list of database ids
     # We need to be mindful of the 1MB SQL limit
@@ -61,7 +61,7 @@ def create_collection(uid: str, database_ids: List[int]) -> String:
             cfg.session.execute(stmt)
         elif cfg.session.bind.dialect.name == 'mysql':
             to_insert = [{'collectionID': uid, 'dbID': y} for y in to_insert]
-            cfg.session.execute(SQLinsert(Collections), to_insert)
+            cfg.session.execute(SQLinsert(db.Collections), to_insert)
     return uid
 
 
@@ -148,19 +148,19 @@ class Wire:
     def sample(self) -> Dict[str, str]:
         """Return data about the sample that this entity is associated with."""
         if self._sample_id is None:
-            self._sample_id = cfg.session.query(Entity.sampleID).filter(Entity.ID == self.db_id).first()[0]
+            self._sample_id = cfg.session.query(db.Entity.sampleID).filter(db.Entity.ID == self.db_id).first()[0]
         # Set up database query to retrieve
-        stm = cfg.session.query(Sample.ID, Sample.supplier, Sample.material, Sample.preparation_date,
-                                Sample.preparation_method, Sample.substrate).filter(
-            Sample.ID == self._sample_id).first()
+        stm = cfg.session.query(db.Sample.ID, db.Sample.supplier, db.Sample.material, db.Sample.preparation_date,
+                                db.Sample.preparation_method, db.Sample.substrate).filter(
+            db.Sample.ID == self._sample_id).first()
         # Zip to dictionary
         keys = ['ID', 'Supplier', 'Material', 'Preparation_date', 'Preparation_method', 'Substrate']
         return dict(zip(keys, stm))
 
     def populate_from_db(self) -> None:
         """Retrieve all experiments associated with this entity ID"""
-        stm = cfg.session.query(Experiment.type, Measurement.ID).join(Measurement).join(Object).join(Entity). \
-            filter(Entity.ID == self.db_id)
+        stm = cfg.session.query(db.Experiment.type, db.Measurement.ID).join(db.Measurement).join(db.Object).join(db.Entity). \
+            filter(db.Entity.ID == self.db_id)
         # Check whether this entity exists
         if not stm.all():
             raise KeyError('No Entity exists with ID {}'.format(self.db_id))
@@ -193,7 +193,7 @@ class Wire:
         else:
             raise TypeError('Experiment must be defined as an integer or a string')
         # Retrieve experiment results from database
-        stm = cfg.session.query(Measurement.data).filter(Measurement.ID == exp_id)
+        stm = cfg.session.query(db.Measurement.data).filter(db.Measurement.ID == exp_id)
         if len(stm.all()) == 1:
             return stm.all()[0][0]
         else:
@@ -217,7 +217,7 @@ class WireCollection:
     # Cursor to use as iterator
     cursor: int = -1
     # Unique ID associated with this collection in the Collections table
-    _uid: String = ""
+    _uid: str = ""
 
     def __repr__(self) -> str:
         """Return string describing collection"""
@@ -237,7 +237,7 @@ class WireCollection:
     def __del__(self) -> None:
         # Clear up the data in collections
         if len(self._uid) > 0:
-            stmt = SQLdelete(Collections).where(Collections.collectionID == self._uid)
+            stmt = SQLdelete(db.Collections).where(db.Collections.collectionID == self._uid)
             cfg.session.execute(stmt)
 
     def __getstate__(self) -> List[int]:
@@ -250,14 +250,14 @@ class WireCollection:
 
     def load_sample(self, sample_id: int) -> None:
         """Load a sample ID into the WireCollection class"""
-        stm = cfg.session.query(Entity.ID).filter(Entity.sampleID == sample_id)
+        stm = cfg.session.query(db.Entity.ID).filter(db.Entity.sampleID == sample_id)
         self.db_ids = [i[0] for i in stm.all()]
         if not self.db_ids:
             raise Warning('No wires found with sample ID {}'.format(sample_id))
 
     def load_entity_group(self, entity_group_id: int) -> None:
         """Load an entityGroup ID into the WireCollection class"""
-        stm = cfg.session.query(EntityGroupEntity.entityID).filter(EntityGroup.ID == entity_group_id)
+        stm = cfg.session.query(db.EntityGroupEntity.entityID).filter(db.EntityGroup.ID == entity_group_id)
         self.db_ids = [i[0] for i in stm.all()]
         # Check if any entities are returned
         if not self.db_ids:
@@ -303,13 +303,13 @@ class WireCollection:
             self._uid = create_collection(self._uid, self.db_ids)
         # Do query if a _uid is available
         if self._uid:
-            sub_query = cfg.session.query(Collections.dbID).filter(Collections.collectionID == self._uid)
+            sub_query = cfg.session.query(db.Collections.dbID).filter(db.Collections.collectionID == self._uid)
         else:
             sub_query = self.db_ids
         # Return a measurement collection with associated entity (to backreference)
-        stm = cfg.session.query(Measurement.ID, Entity.ID).select_from(Measurement). \
-            join(Object).join(Entity).join(Experiment). \
-            filter(Entity.ID.in_(sub_query), Experiment.type == experiment_name)
+        stm = cfg.session.query(db.Measurement.ID, db.Entity.ID).select_from(db.Measurement). \
+            join(db.Object).join(db.Entity).join(db.Experiment). \
+            filter(db.Entity.ID.in_(sub_query), db.Experiment.type == experiment_name)
         # Execute
         ret = stm.all()
         # Return
@@ -356,7 +356,7 @@ class MeasurementCollection:
     # Cache switch
     _use_cache: bool = True
     # Internal link to _uid for database
-    _uid: String = ''
+    _uid: str = ''
 
     def __init__(self, measurement_ids: Union[np.array, List[int]] = None,
                  entity_ids: Union[np.array, List[int]] = None) -> None:
@@ -381,7 +381,7 @@ class MeasurementCollection:
     def __del__(self) -> None:
         # Remove the instance from memory and remove the associated Collection data
         if len(self._uid) > 0:
-            stmt = SQLdelete(Collections).where(Collections.collectionID == self._uid)
+            stmt = SQLdelete(db.Collections).where(db.Collections.collectionID == self._uid)
             cfg.session.execute(stmt)
 
     def __getstate__(self) -> dict:
@@ -430,12 +430,12 @@ class MeasurementCollection:
                 if len(self._uid) == 0:
                     self._uid = create_collection(self._uid, to_get)
                 if self._uid:
-                    sub_query = cfg.session.query(Collections.dbID).filter(Collections.collectionID == self._uid)
+                    sub_query = cfg.session.query(db.Collections.dbID).filter(db.Collections.collectionID == self._uid)
                 else:
                     sub_query = to_get
                 # Assemble the query
-                stm = cfg.session.query(Measurement.data, Object.entity_id, Measurement.ID, Measurement.experiment_ID). \
-                    join(Object).filter(Measurement.ID.in_(sub_query))
+                stm = cfg.session.query(db.Measurement.data, db.Object.entity_id, db.Measurement.ID, db.Measurement.experiment_ID).\
+                    join(db.Object).filter(db.Measurement.ID.in_(sub_query))
                 # Collection from database
                 stmall = stm.all()
                 # Format from DB
@@ -540,7 +540,7 @@ class PostProcess:
         else:
             raise TypeError(
                 'PostProcess must be initialised with a MeasurementCollection or a PostProcess class, not a  "{}"'
-                    .format(type(mc))
+                .format(type(mc))
             )
 
     def __repr__(self) -> str:
@@ -645,8 +645,8 @@ class ExperimentMetadata(Mapping):
         """Refresh from database"""
         if experiment_id:
             self.experiment_id = experiment_id
-        stm = cfg.session.query(Metadata.key, Metadata.value) \
-            .filter(Metadata.experiment_id == self.experiment_id).all()
+        stm = cfg.session.query(db.Metadata.key, db.Metadata.value) \
+            .filter(db.Metadata.experiment_id == self.experiment_id).all()
         # Dictionary comprehension to internal
         if len(stm) > 0:
             self._internal_mapping = {k: v for (k, v) in stm}
@@ -663,7 +663,7 @@ class ExperimentMetadata(Mapping):
             else:
                 raise KeyError("Experiment ID should be an integer or a dataframe")
         elif measurement_id:
-            eid = cfg.session.query(Measurement.experiment_ID).filter(Measurement.ID == measurement_id).all()
+            eid = cfg.session.query(db.Measurement.experiment_ID).filter(db.Measurement.ID == measurement_id).all()
             if len(eid) == 1:
                 self.experiment_id = eid[0]
             else:
