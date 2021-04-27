@@ -1,4 +1,4 @@
-# Test code for BDNE
+# Example usage for BDNE
 # Author : Patrick Parkinson <patrick.parkinson@manchester.ac.uk>
 
 import matplotlib.pyplot as plt

@@ -517,7 +517,7 @@ class PostProcess:
                 self.data_column = 'data'
             elif type(mc) is PostProcess:
                 self.data_column = 'processed'
-        elif type(mc) is None:
+        elif mc is None:
             return
         else:
             raise TypeError(
