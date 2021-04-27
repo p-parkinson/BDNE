@@ -38,7 +38,7 @@ def create_collection(uid: str, database_ids: List[int]) -> String:
         elif cfg.session.bind.dialect.name == 'mysql':
             uid = cfg.session.execute('SELECT UUID();').first()[0]
         else:
-            raise(RuntimeError('Unknown database type'))
+            raise (RuntimeError('Unknown database type'))
     else:
         # We have been passed a _uid - clear existing data
         stmt = SQLdelete(Collections).where(Collections.collectionID == uid)
@@ -60,7 +60,7 @@ def create_collection(uid: str, database_ids: List[int]) -> String:
                    f'current_timestamp() FROM UNNEST({to_insert}) as x; '
             cfg.session.execute(stmt)
         elif cfg.session.bind.dialect.name == 'mysql':
-            to_insert = [{'collectionID':uid, 'dbID':y} for y in to_insert]
+            to_insert = [{'collectionID': uid, 'dbID': y} for y in to_insert]
             cfg.session.execute(SQLinsert(Collections), to_insert)
     return uid
 
@@ -151,14 +151,15 @@ class Wire:
             self._sample_id = cfg.session.query(Entity.sampleID).filter(Entity.ID == self.db_id).first()[0]
         # Set up database query to retrieve
         stm = cfg.session.query(Sample.ID, Sample.supplier, Sample.material, Sample.preparation_date,
-                            Sample.preparation_method, Sample.substrate).filter(Sample.ID == self._sample_id).first()
+                                Sample.preparation_method, Sample.substrate).filter(
+            Sample.ID == self._sample_id).first()
         # Zip to dictionary
         keys = ['ID', 'Supplier', 'Material', 'Preparation_date', 'Preparation_method', 'Substrate']
         return dict(zip(keys, stm))
 
     def populate_from_db(self) -> None:
         """Retrieve all experiments associated with this entity ID"""
-        stm = cfg.session.query(Experiment.type, Measurement.ID).join(Measurement).join(Object).join(Entity).\
+        stm = cfg.session.query(Experiment.type, Measurement.ID).join(Measurement).join(Object).join(Entity). \
             filter(Entity.ID == self.db_id)
         # Check whether this entity exists
         if not stm.all():
@@ -238,6 +239,14 @@ class WireCollection:
         if len(self._uid) > 0:
             stmt = SQLdelete(Collections).where(Collections.collectionID == self._uid)
             cfg.session.execute(stmt)
+
+    def __getstate__(self) -> List[int]:
+        """Select what gets pickled"""
+        return self.db_ids
+
+    def __setstate__(self, state: List[int]) -> None:
+        """Only restore db_ids"""
+        self.db_ids = state
 
     def load_sample(self, sample_id: int) -> None:
         """Load a sample ID into the WireCollection class"""
@@ -375,6 +384,15 @@ class MeasurementCollection:
             stmt = SQLdelete(Collections).where(Collections.collectionID == self._uid)
             cfg.session.execute(stmt)
 
+    def __getstate__(self) -> dict:
+        """Only store/pickle entity and db_ids"""
+        return {'db_ids': self.db_ids, 'entity_ids': self.entity_ids}
+
+    def __setstate__(self, state: dict) -> None:
+        """Only restore db_ids and entity ids"""
+        self.db_ids = state['db_ids']
+        self.entity_ids = state['entity_ids']
+
     def sample(self, number: int = 1) -> pd.DataFrame:
         """Get a random selection of 'number' measurements"""
         selected = random.choices(range(len(self.db_ids)), k=number)
@@ -416,7 +434,7 @@ class MeasurementCollection:
                 else:
                     sub_query = to_get
                 # Assemble the query
-                stm = cfg.session.query(Measurement.data, Object.entity_id, Measurement.ID, Measurement.experiment_ID).\
+                stm = cfg.session.query(Measurement.data, Object.entity_id, Measurement.ID, Measurement.experiment_ID). \
                     join(Object).filter(Measurement.ID.in_(sub_query))
                 # Collection from database
                 stmall = stm.all()
@@ -522,7 +540,7 @@ class PostProcess:
         else:
             raise TypeError(
                 'PostProcess must be initialised with a MeasurementCollection or a PostProcess class, not a  "{}"'
-                .format(type(mc))
+                    .format(type(mc))
             )
 
     def __repr__(self) -> str:

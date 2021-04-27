@@ -52,11 +52,11 @@ A typical workflow might be:
 
 ```python
 
-from BDNE import connect_big_query
+from BDNE import connect_mysql
 from BDNE import data_structures
 
 # Connect to the database back-end
-connect_big_query()
+connect_mysql()
 
 # Create an empty container
 wc = data_structures.WireCollection()
