@@ -4,8 +4,10 @@
 import unittest
 from BDNE import connect_mysql
 from BDNE import data_structures
+from BDNE import matlab_serialise as ms
 from pandas import DataFrame
 from numpy import ndarray
+import numpy as np
 
 
 class TestDataStructures(unittest.TestCase):
@@ -41,15 +43,15 @@ class TestDataStructures(unittest.TestCase):
         wc.load_sample(47)
         mc = wc.get_measurement('l')
         # Test number
-        self.assertEqual(len(mc),21162)
+        self.assertEqual(len(mc), 21162)
         # Test type
-        self.assertIs(type(mc),data_structures.MeasurementCollection)
+        self.assertIs(type(mc), data_structures.MeasurementCollection)
         # Test matrix collect
         m = mc.collect_as_matrix()
-        self.assertAlmostEqual(sum(m), 269038, delta = 1)
+        self.assertAlmostEqual(sum(m), 269038, delta=1)
         # Test sample output type
         o = mc.sample(1)
-        self.assertIs(type(o),DataFrame)
+        self.assertIs(type(o), DataFrame)
 
     def test_postprocess(self):
         """Testing the postprocess class"""
@@ -58,14 +60,23 @@ class TestDataStructures(unittest.TestCase):
         mc = wc.get_measurement('l')
         pp = data_structures.PostProcess()
         pp.set_data(mc)
-        pp.set_function(lambda x: x**2)
+        pp.set_function(lambda x: x ** 2)
         # Collect
         pp_out = pp.collect_as_matrix()
         mc_out = mc.collect_as_matrix()
         # Check output type
-        self.assertIs(type(pp_out),ndarray)
+        self.assertIs(type(pp_out), ndarray)
         # Check function
-        self.assertEqual(pp_out[0],mc_out[0]**2)
+        self.assertEqual(pp_out[0], mc_out[0] ** 2)
+
+
+class TestMatlabSerialiseDeserialise(unittest.TestCase):
+
+    def test_matlab_serialise(self):
+        test_cases = [np.array(5), np.array([5, 10]), np.array([[5, 10], [5, 10]]), np.array([[5., 10.], [5., 10.]])]
+        for ts in test_cases:
+            print(ts)
+            np.testing.assert_equal(ts, ms.deserialise(ms.serialise(ts)))
 
 
 if __name__ == '__main__':

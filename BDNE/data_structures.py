@@ -20,49 +20,7 @@ from collections.abc import Mapping
 # Import the core BDNE ORM and configuration to deal with the database
 import BDNE.db_orm as db
 import BDNE.config as cfg
-from sqlalchemy import delete as sql_delete, insert as sql_insert
-
-
-#################################################################
-#   A helper for creating temporary lists of database IDs on Collection
-#################################################################
-def create_collection(uid: str, database_ids: List[int]) -> str:
-    """Create a collection of database IDs in the Collections table of the database. This function creates
-    a table of database ID values linked to a unique key, allowing to select against very large sets."""
-    # The databases used typically have a 1MB limit for query size, which is easy to run into
-
-    if len(uid) == 0:
-        # Generate fresh UID : if we are connected to bigquery we can use GENERATE_UUID, if mysql then "UUID"
-        if cfg.session.bind.dialect.name == 'bigquery':
-            uid = cfg.session.execute('SELECT GENERATE_UUID();').first()[0]
-        elif cfg.session.bind.dialect.name == 'mysql':
-            uid = cfg.session.execute('SELECT UUID();').first()[0]
-        else:
-            raise (RuntimeError('Unknown database type'))
-    else:
-        # We have been passed a _uid - clear existing data
-        stmt = sql_delete(db.Collections).where(db.Collections.collectionID == uid)
-        cfg.session.execute(stmt)
-    # We next insert the provided list of database ids
-    # We need to be mindful of the 1MB SQL limit
-    while len(database_ids) > 0:
-        # Pop the first max_inserts from the list and insert into database
-        max_inserts = 10000 if (cfg.session.bind.dialect.name == 'bigquery') else 10000
-        if len(database_ids) > max_inserts:
-            to_insert = database_ids[0:max_inserts]
-            database_ids = database_ids[max_inserts:]
-        else:
-            to_insert = database_ids
-            database_ids = []
-        # Create an insert statement. This can be quite efficient with bigquery using unnest.
-        if cfg.session.bind.dialect.name == 'bigquery':
-            stmt = f'INSERT primary.collections (collectionID, dbID,created) SELECT "{uid}", x,' \
-                   f'current_timestamp() FROM UNNEST({to_insert}) as x; '
-            cfg.session.execute(stmt)
-        elif cfg.session.bind.dialect.name == 'mysql':
-            to_insert = [{'collectionID': uid, 'dbID': y} for y in to_insert]
-            cfg.session.execute(sql_insert(db.Collections), to_insert)
-    return uid
+from BDNE.config import db_batch_size
 
 
 #################################################################
@@ -216,8 +174,6 @@ class EntityCollection:
     db_ids: List[int] = []
     # Cursor to use as iterator
     cursor: int = -1
-    # Unique ID associated with this collection in the Collections table
-    _uid: str = ""
 
     def __repr__(self) -> str:
         """Return string describing collection"""
@@ -236,9 +192,7 @@ class EntityCollection:
 
     def __del__(self) -> None:
         # Clear up the data in collections
-        if len(self._uid) > 0:
-            stmt = sql_delete(db.Collections).where(db.Collections.collectionID == self._uid)
-            cfg.session.execute(stmt)
+        pass
 
     def __getstate__(self) -> List[int]:
         """Select what gets pickled"""
@@ -298,22 +252,31 @@ class EntityCollection:
 
     def get_measurement(self, experiment_name: str) -> MeasurementCollection:
         """Return a MeasurementCollection (when a string is passed)"""
-        # It is more efficient to go via a join than an "in" if over 1000
-        if len(self._uid) == 0:
-            self._uid = create_collection(self._uid, self.db_ids)
-        # Do query if a _uid is available
-        if self._uid:
-            sub_query = cfg.session.query(db.Collections.dbID).filter(db.Collections.collectionID == self._uid)
-        else:
-            sub_query = self.db_ids
-        # Return a measurement collection with associated entity (to backreference)
-        stm = cfg.session.query(db.Measurement.ID, db.Entity.ID).select_from(db.Measurement). \
-            join(db.Object).join(db.Entity).join(db.Experiment). \
-            filter(db.Entity.ID.in_(sub_query), db.Experiment.type == experiment_name)
-        # Execute
-        ret = stm.all()
-        # Return
-        return MeasurementCollection(measurement_ids=[i[0] for i in ret], entity_ids=[i[1] for i in ret])
+        # Make a copy of the db_ids
+        all_db_ids = self.db_ids.copy()
+        # Create empty lists to hold the ids
+        measurement_ids = []
+        entity_ids = []
+        # Pop ids to get
+        while len(all_db_ids) > 0:
+            # For final batch, take all. For earlier batches, take
+            if len(all_db_ids) < db_batch_size:
+                sub_query = all_db_ids
+                all_db_ids = []
+            else:
+                sub_query = all_db_ids[0:db_batch_size]
+                all_db_ids = all_db_ids[db_batch_size:]
+            # Create statement
+            stm = cfg.session.query(db.Measurement.ID, db.Entity.ID).select_from(db.Measurement). \
+                join(db.Object).join(db.Entity).join(db.Experiment). \
+                filter(db.Entity.ID.in_(sub_query), db.Experiment.type == experiment_name)
+            # Execute statement
+            ret = stm.all()
+            # Add returned to lists
+            measurement_ids.extend([i[0] for i in ret])
+            entity_ids.extend([i[1] for i in ret])
+        # Return a MeasurementCollection
+        return MeasurementCollection(measurement_ids=measurement_ids, entity_ids=entity_ids)
 
     def __next__(self) -> Entity:
         """To iterate over each entity in the Collection"""
@@ -355,8 +318,6 @@ class MeasurementCollection:
     _db_cache: DBCache = DBCache()
     # Cache switch
     _use_cache: bool = True
-    # Internal link to _uid for database
-    _uid: str = ''
 
     def __init__(self, measurement_ids: Union[np.array, List[int]] = None,
                  entity_ids: Union[np.array, List[int]] = None) -> None:
@@ -380,9 +341,7 @@ class MeasurementCollection:
 
     def __del__(self) -> None:
         # Remove the instance from memory and remove the associated Collection data
-        if len(self._uid) > 0:
-            stmt = sql_delete(db.Collections).where(db.Collections.collectionID == self._uid)
-            cfg.session.execute(stmt)
+        pass
 
     def __getstate__(self) -> dict:
         """Only store/pickle entity and db_ids"""
@@ -426,24 +385,27 @@ class MeasurementCollection:
                 cached = None
             # Collect any remaining datasets rest
             if len(to_get) > 0:
-                # Create entry in temporary table
-                if len(self._uid) == 0:
-                    self._uid = create_collection(self._uid, to_get)
-                if self._uid:
-                    sub_query = cfg.session.query(db.Collections.dbID).filter(db.Collections.collectionID == self._uid)
-                else:
-                    sub_query = to_get
-                # Assemble the query
-                stm = cfg.session.query(db.Measurement.data, db.Object.entity_id,
-                                        db.Measurement.ID, db.Measurement.experiment_ID).\
-                    join(db.Object).filter(db.Measurement.ID.in_(sub_query))
-                # Collection from database
-                query_result = stm.all()
-                # Format from DB
-                db_data = [np.array(i[0]).squeeze() for i in query_result]
-                entity = [i[1] for i in query_result]
-                db_id = [i[2] for i in query_result]
-                exp_id = [i[3] for i in query_result]
+                # TODO: Remove temporary table and use batched retrieve for large sets
+                # Initialise
+                db_data, entity, db_id, exp_id = [], [], [], []
+                while len(to_get) > 0:
+                    if len(to_get) < db_batch_size:
+                        sub_query = to_get
+                        to_get = []
+                    else:
+                        sub_query = to_get[0:db_batch_size]
+                        to_get = to_get[db_batch_size:]
+                    # Assemble the query
+                    stm = cfg.session.query(db.Measurement.data, db.Object.entity_id,
+                                            db.Measurement.ID, db.Measurement.experiment_ID).\
+                        join(db.Object).filter(db.Measurement.ID.in_(sub_query))
+                    # Collection from database
+                    query_result = stm.all()
+                    # Format from DB
+                    db_data.extend([np.array(i[0]).squeeze() for i in query_result])
+                    entity.extend([i[1] for i in query_result])
+                    db_id.extend([i[2] for i in query_result])
+                    exp_id.extend([i[3] for i in query_result])
                 # Convert to a dataframe
                 to_return = pd.DataFrame(
                     data={'db_id': db_id, 'entity': entity, 'experiment_id': exp_id, 'data': db_data},
