@@ -20,7 +20,7 @@ from collections.abc import Mapping
 # Import the core BDNE ORM and configuration to deal with the database
 import BDNE.db_orm as db
 import BDNE.config as cfg
-from sqlalchemy import delete as SQLdelete, insert as SQLinsert
+from sqlalchemy import delete as sql_delete, insert as sql_insert
 
 
 #################################################################
@@ -32,7 +32,7 @@ def create_collection(uid: str, database_ids: List[int]) -> str:
     # The databases used typically have a 1MB limit for query size, which is easy to run into
 
     if len(uid) == 0:
-        # Generate fresh UID : if we are connected to biquery we can use GENERATE_UUID, if mysql then "UUID"
+        # Generate fresh UID : if we are connected to bigquery we can use GENERATE_UUID, if mysql then "UUID"
         if cfg.session.bind.dialect.name == 'bigquery':
             uid = cfg.session.execute('SELECT GENERATE_UUID();').first()[0]
         elif cfg.session.bind.dialect.name == 'mysql':
@@ -41,7 +41,7 @@ def create_collection(uid: str, database_ids: List[int]) -> str:
             raise (RuntimeError('Unknown database type'))
     else:
         # We have been passed a _uid - clear existing data
-        stmt = SQLdelete(db.Collections).where(db.Collections.collectionID == uid)
+        stmt = sql_delete(db.Collections).where(db.Collections.collectionID == uid)
         cfg.session.execute(stmt)
     # We next insert the provided list of database ids
     # We need to be mindful of the 1MB SQL limit
@@ -61,7 +61,7 @@ def create_collection(uid: str, database_ids: List[int]) -> str:
             cfg.session.execute(stmt)
         elif cfg.session.bind.dialect.name == 'mysql':
             to_insert = [{'collectionID': uid, 'dbID': y} for y in to_insert]
-            cfg.session.execute(SQLinsert(db.Collections), to_insert)
+            cfg.session.execute(sql_insert(db.Collections), to_insert)
     return uid
 
 
@@ -93,9 +93,9 @@ class DBCache:
         ids = np.array(ids)
         # Get from cache
         cached = self._cache[self._cache.index.isin(ids)]
-        # List unfound items to be read in
-        unfound = np.setdiff1d(ids, cached.index.to_numpy()).tolist()
-        return unfound, cached
+        # List not found items to be read in
+        not_found = np.setdiff1d(ids, cached.index.to_numpy()).tolist()
+        return not_found, cached
 
     def update(self, ids: np.Array, data: pd.DataFrame) -> None:
         """Update the cache for the ids provided with the data provided"""
@@ -104,12 +104,12 @@ class DBCache:
         # Make sure not to update existing data
         missing = np.setdiff1d(ids, self._cache.index.to_numpy())
         # update index
-        oldidx = data.index
+        old_index = data.index
         data.index = ids
         # Create new dataframe
         self._cache = self._cache.append(data[data.index.isin(missing)])
         # Restore
-        data.index = oldidx
+        data.index = old_index
 
     def __len__(self) -> pd.Series:
         """Return the amount of memory used by the cache."""
@@ -159,8 +159,8 @@ class Wire:
 
     def populate_from_db(self) -> None:
         """Retrieve all experiments associated with this entity ID"""
-        stm = cfg.session.query(db.Experiment.type, db.Measurement.ID).join(db.Measurement).join(db.Object).join(db.Entity). \
-            filter(db.Entity.ID == self.db_id)
+        stm = cfg.session.query(db.Experiment.type, db.Measurement.ID).join(db.Measurement).join(db.Object).\
+            join(db.Entity).filter(db.Entity.ID == self.db_id)
         # Check whether this entity exists
         if not stm.all():
             raise KeyError('No Entity exists with ID {}'.format(self.db_id))
@@ -237,7 +237,7 @@ class WireCollection:
     def __del__(self) -> None:
         # Clear up the data in collections
         if len(self._uid) > 0:
-            stmt = SQLdelete(db.Collections).where(db.Collections.collectionID == self._uid)
+            stmt = sql_delete(db.Collections).where(db.Collections.collectionID == self._uid)
             cfg.session.execute(stmt)
 
     def __getstate__(self) -> List[int]:
@@ -381,7 +381,7 @@ class MeasurementCollection:
     def __del__(self) -> None:
         # Remove the instance from memory and remove the associated Collection data
         if len(self._uid) > 0:
-            stmt = SQLdelete(db.Collections).where(db.Collections.collectionID == self._uid)
+            stmt = sql_delete(db.Collections).where(db.Collections.collectionID == self._uid)
             cfg.session.execute(stmt)
 
     def __getstate__(self) -> dict:
@@ -434,15 +434,16 @@ class MeasurementCollection:
                 else:
                     sub_query = to_get
                 # Assemble the query
-                stm = cfg.session.query(db.Measurement.data, db.Object.entity_id, db.Measurement.ID, db.Measurement.experiment_ID).\
+                stm = cfg.session.query(db.Measurement.data, db.Object.entity_id,
+                                        db.Measurement.ID, db.Measurement.experiment_ID).\
                     join(db.Object).filter(db.Measurement.ID.in_(sub_query))
                 # Collection from database
-                stmall = stm.all()
+                query_result = stm.all()
                 # Format from DB
-                db_data = [np.array(i[0]).squeeze() for i in stmall]
-                entity = [i[1] for i in stmall]
-                db_id = [i[2] for i in stmall]
-                exp_id = [i[3] for i in stmall]
+                db_data = [np.array(i[0]).squeeze() for i in query_result]
+                entity = [i[1] for i in query_result]
+                db_id = [i[2] for i in query_result]
+                exp_id = [i[3] for i in query_result]
                 # Convert to a dataframe
                 to_return = pd.DataFrame(
                     data={'db_id': db_id, 'entity': entity, 'experiment_id': exp_id, 'data': db_data},
@@ -466,7 +467,7 @@ class MeasurementCollection:
         return self._get(range(len(self.db_ids)))
 
     def collect_as_matrix(self) -> np.array:
-        """Get all measurements as an n x m array, where n wires with m datapoints per measurement"""
+        """Get all measurements as an n x m array, where n wires with m data points per measurement"""
         return np.stack(self.collect()['data'])
 
     def mask(self, id_set: Union[pd.DataFrame, MeasurementCollection, list]) -> MeasurementCollection:
