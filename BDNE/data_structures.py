@@ -117,12 +117,12 @@ class DBCache:
 
 
 #################################################################
-#   A single wire class
+#   A single entity class
 #################################################################
-class Wire:
+class Entity:
     """Class to store all of the data for a given entity.
         Typical Usage:
-        w = Wire(1000);
+        w = Entity(1000);
         print(w);"""
     # The database ID of this entity
     db_id: int = None
@@ -139,7 +139,7 @@ class Wire:
         return r
 
     def __init__(self, db_id: int = None) -> None:
-        """Initialise the wire class as empty, or with an entity id."""
+        """Initialise the entity class as empty, or with an entity id."""
         if db_id is None:
             return
         # ID given
@@ -185,11 +185,11 @@ class Wire:
             exp_id = [i[1] for i in self.experiment_container if i[0] == experiment]
             # Check how many datasets are associated with this
             if len(exp_id) == 0:
-                raise KeyError('Experiment {} not present for wire ID {}'.format(experiment, self.db_id))
+                raise KeyError('Experiment {} not present for Entity ID {}'.format(experiment, self.db_id))
             elif len(exp_id) == 1:
                 exp_id = exp_id[0]
             else:
-                raise KeyError('Experiment {} ambiguous for wire ID {}'.format(experiment, self.db_id))
+                raise KeyError('Experiment {} ambiguous for Entity ID {}'.format(experiment, self.db_id))
         else:
             raise TypeError('Experiment must be defined as an integer or a string')
         # Retrieve experiment results from database
@@ -201,15 +201,15 @@ class Wire:
 
 
 #################################################################
-#   WireCollection (a collection of wires)
+#   EntityCollection (a collection of Entities)
 #################################################################
 
-class WireCollection:
+class EntityCollection:
     """A collection of entities.
     Lazy handling, stores only db_ids for the entities and returns either an entity, a set of entities,
     or a set of measurements.
       Typical usage:
-      ``w = WireCollection();
+      ``w = EntityCollection();
       w.load_sample(25);``"""
 
     # Database IDs associated with entities in this set
@@ -249,52 +249,52 @@ class WireCollection:
         self.db_ids = state
 
     def load_sample(self, sample_id: int) -> None:
-        """Load a sample ID into the WireCollection class"""
+        """Load a sample ID into the EntityCollection class"""
         stm = cfg.session.query(db.Entity.ID).filter(db.Entity.sampleID == sample_id)
         self.db_ids = [i[0] for i in stm.all()]
         if not self.db_ids:
-            raise Warning('No wires found with sample ID {}'.format(sample_id))
+            raise Warning('No Entities found with sample ID {}'.format(sample_id))
 
     def load_entity_group(self, entity_group_id: int) -> None:
-        """Load an entityGroup ID into the WireCollection class"""
+        """Load an entityGroup ID into the EntityCollection class"""
         stm = cfg.session.query(db.EntityGroupEntity.entityID).filter(db.EntityGroup.ID == entity_group_id)
         self.db_ids = [i[0] for i in stm.all()]
         # Check if any entities are returned
         if not self.db_ids:
-            raise Warning('No wires found with sample ID {}'.format(entity_group_id))
+            raise Warning('No Entities found with sample ID {}'.format(entity_group_id))
 
-    def sample(self, number_to_sample: int = 0) -> Union[Wire, WireCollection]:
-        """Return a random subset of k entities from the WireCollection."""
+    def sample(self, number_to_sample: int = 0) -> Union[Entity, EntityCollection]:
+        """Return a random subset of k entities from the EntityCollection."""
         if number_to_sample > 0:
             wid = random.choices(self.db_ids, k=number_to_sample)
-            # Select - return either a Wire or a WireCollection
+            # Select - return either an Entity or a EntityCollection
             if len(wid) == 1:
-                return Wire(wid[0])
+                return Entity(wid[0])
             else:
-                return WireCollection(wid)
+                return EntityCollection(wid)
         else:
             raise TypeError('Argument to sample must be an integer.')
 
-    def mask(self, id_set: Union[WireCollection, MeasurementCollection]) -> WireCollection:
+    def mask(self, id_set: Union[EntityCollection, MeasurementCollection]) -> EntityCollection:
         """Create a new entity set from an intersection with other entity ids"""
-        if type(id_set) is WireCollection:
+        if type(id_set) is EntityCollection:
             id_set = id_set.db_ids
         if type(id_set) is MeasurementCollection:
             id_set = id_set.entity_ids
         else:
-            raise TypeError('Mask must be passed as either a MeasurementCollection or another WireCollection')
+            raise TypeError('Mask must be passed as either a MeasurementCollection or another EntityCollection')
         # Create an intersection between the local IDs and the remote ID set
         intersection = set(self.db_ids).intersection(id_set)
-        return WireCollection(list(intersection))
+        return EntityCollection(list(intersection))
 
-    def logical_mask(self, mask: np.Array) -> WireCollection:
+    def logical_mask(self, mask: np.Array) -> EntityCollection:
         """Create a new wire collection using a logical mask"""
         new_ids = np.array(self.db_ids)[mask].tolist()
-        return WireCollection(new_ids)
+        return EntityCollection(new_ids)
 
-    def get_wire(self, wire_id: int) -> Wire:
+    def get_entity(self, id: int) -> Entity:
         """Return a single entity"""
-        return Wire(self.db_ids[wire_id])
+        return Entity(self.db_ids[id])
 
     def get_measurement(self, experiment_name: str) -> MeasurementCollection:
         """Return a MeasurementCollection (when a string is passed)"""
@@ -315,22 +315,22 @@ class WireCollection:
         # Return
         return MeasurementCollection(measurement_ids=[i[0] for i in ret], entity_ids=[i[1] for i in ret])
 
-    def __next__(self) -> Wire:
+    def __next__(self) -> Entity:
         """To iterate over each entity in the Collection"""
         self.cursor = self.cursor + 1
         # Check for end of list
         if self.cursor == len(self.db_ids):
             self.cursor = 0
             raise StopIteration()
-        return self.get_wire(self.cursor)
+        return self.get_entity(self.cursor)
 
-    def __iter__(self) -> WireCollection:
+    def __iter__(self) -> EntityCollection:
         # Return self
         return self
 
-    def __add__(self, other: WireCollection) -> WireCollection:
+    def __add__(self, other: EntityCollection) -> EntityCollection:
         """Combine two entityCollections and return a merged set"""
-        return WireCollection(self.db_ids + other.db_ids)
+        return EntityCollection(self.db_ids + other.db_ids)
 
 
 #################################################################
@@ -342,7 +342,7 @@ class MeasurementCollection:
     Uses lazy loading, holding only the database IDs and associated entity IDs until a get()
     or collect() is issued.
         Typical Usage:
-        w = WireCollection();
+        w = EntityCollection();
         w.load_entity_group(4);
         e = w.get_measurement('spectra'); # A MeasurementCollection"""
     # Database IDs for the measurements
@@ -467,7 +467,7 @@ class MeasurementCollection:
         return self._get(range(len(self.db_ids)))
 
     def collect_as_matrix(self) -> np.array:
-        """Get all measurements as an n x m array, where n wires with m data points per measurement"""
+        """Get all measurements as an n x m array, where n entities with m data points per measurement"""
         return np.stack(self.collect()['data'])
 
     def mask(self, id_set: Union[pd.DataFrame, MeasurementCollection, list]) -> MeasurementCollection:
@@ -510,7 +510,7 @@ class PostProcess:
     """A wrapper around a MeasurementCollection or another PostProcess function to cleanly add
     line-by-line processing.
         Typical Usage:
-        w = WireCollection()
+        w = EntityCollection()
         w.load_entity_group(4)
         spectra = w.get_measurement('spectra')
         PL = PostProcess(spectra)

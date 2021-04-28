@@ -9,7 +9,7 @@ from BDNE.physics.photoluminescence_models import *
 from BDNE import data_structures
 
 # Create a Wire collection
-w = data_structures.WireCollection()
+w = data_structures.EntityCollection()
 # Populate from the database, sample ID 25
 w.loadsample(25)
 # List how many wires samples

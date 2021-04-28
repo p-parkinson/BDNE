@@ -38,8 +38,8 @@ To connect to the public BigQuery datasource, a credentials file is required. Co
 ### High-level functionality ###
 
 Four classes are implemented for higher-level functionality, within the ```data_structures.py``` file.
-* ```Wire``` - A container class for a single entity, and all associated measurements.
-* ```WireCollection``` - A container class for a collection of entities.
+* ```Entity``` - A container class for a single entity, and all associated measurements.
+* ```EntityCollection``` - A container class for a collection of entities.
 * ```MeasurementCollection``` - A container class for a collection of measurements.
 * ```PostProcess``` - A class to wrap MeasurementCollection or PostProcess collections with a processing function. 
 
@@ -59,7 +59,7 @@ from BDNE import data_structures
 connect_mysql()
 
 # Create an empty container
-wc = data_structures.WireCollection()
+wc = data_structures.EntityCollection()
 # Load data related to sample 25
 wc.load_sample(25)
 

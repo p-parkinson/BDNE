@@ -15,29 +15,29 @@ class TestDataStructures(unittest.TestCase):
         """Set-up : connect via my_sql at the start of the unittest"""
         connect_mysql()
 
-    def test_wire(self):
+    def test_entity(self):
         """General test for operation of Wire data_structure"""
-        w = data_structures.Wire(1000)
+        w = data_structures.Entity(1000)
         # Check experiments
         self.assertEqual(len(w.experiments()), 15)
         s = w.get('spectra_int')
         # Check a single parameter
         self.assertEqual(s, 73192500)
 
-    def test_wire_collection(self):
-        """General test for operation of WireCollection data_structure"""
-        wc = data_structures.WireCollection()
+    def test_entity_collection(self):
+        """General test for operation of EntityCollection data_structure"""
+        wc = data_structures.EntityCollection()
         wc.load_sample(47)
         # Check length
         self.assertEqual(len(wc), 21162)
         # Get a wire and test
-        w = wc.get_wire(1)
-        self.assertIs(type(w),data_structures.Wire)
+        w = wc.get_entity(1)
+        self.assertIs(type(w), data_structures.Entity)
         self.assertEqual(w.db_id, 84439)
 
     def test_measurement_collection(self):
         """General test for a MeasurementCollection"""
-        wc = data_structures.WireCollection()
+        wc = data_structures.EntityCollection()
         wc.load_sample(47)
         mc = wc.get_measurement('l')
         # Test number
@@ -53,7 +53,7 @@ class TestDataStructures(unittest.TestCase):
 
     def test_postprocess(self):
         """Testing the postprocess class"""
-        wc = data_structures.WireCollection()
+        wc = data_structures.EntityCollection()
         wc.load_sample(47)
         mc = wc.get_measurement('l')
         pp = data_structures.PostProcess()
