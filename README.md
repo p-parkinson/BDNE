@@ -103,4 +103,4 @@ This code is the product of input from researchers and students at the Universit
 * **Stephen Church** [stephen.church@manchester.ac.uk](mailto:stephen.church@manchester.ac.uk) - Photoluminescence fitting
 * **Rafe Whitehead, Thomas Blackmore, Jonathan Ryding** - Masters students contributing to testing.
 
-The underlying dataset contains materials created via contributions from researchers around the world.
+The underlying dataset contains materials created via contributions from researchers around the world .
