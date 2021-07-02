@@ -189,6 +189,8 @@ class EntityCollection:
     db_ids: List[int] = []
     # Cursor to use as iterator
     cursor: int = -1
+    # Count how many batches of entities have been retrieved already
+    batch_no = 0
 
     def __repr__(self) -> str:
         """Return string describing collection"""
@@ -292,6 +294,45 @@ class EntityCollection:
             entity_ids.extend([i[1] for i in ret])
         # Return a MeasurementCollection
         return MeasurementCollection(measurement_ids=measurement_ids, entity_ids=entity_ids)
+    
+    def get_batch(self) -> MeasurementCollection:
+        """Return a dataframe with a batch of entities and their data,
+        categorised into columns based on experiment type."""
+        # Make a copy of the db_ids
+        all_db_ids = self.db_ids.copy()
+        all_db_ids.sort()
+        sub_query = all_db_ids[db_batch_size*self.batch_no:db_batch_size*(self.batch_no+1)]
+        # Create a query statement
+        stm = cfg.session.query(db.Entity.ID, db.Experiment.ID, db.Measurement.data).select_from(db.Measurement) \
+            .join(db.Object).join(db.Entity).join(db.Experiment) \
+                .filter(db.Entity.ID.in_(sub_query))
+        # Execute the statement
+        query = stm.all()
+        # Turn the returned data into a pandas dataframe
+        df = pd.DataFrame(query, columns=["nanoobject", "experiment", "data"])
+        # Use a pivot table to rearrange df into a useful spare matrix
+        # There may be entities which did not have a specific experiment done on them, the locations corresponding to these will be filled with NaN values.
+        df = df.pivot(index='nanoobject', columns='experiment', values='data')
+        # increment batch number by 1, and return the results
+        self.batch_no += 1
+        # Return a dataframe
+        return df
+    
+    def get_data(self) -> MeasurementCollection:
+        """Return a dataframe with all the measurement data related to this entity collection,
+        with rows representing entities and columns representing different types of experiments."""
+        # Create statement
+        stm = cfg.session.query(db.Entity.ID,db.Experiment.ID,db.Measurement.data).select_from(db.Measurement) \
+            .join(db.Object).join(db.Entity).join(db.Experiment) \
+        # Execute the statement
+        query = stm.all()
+        # Turn the returned data into a pandas dataframe
+        df = pd.DataFrame(query, columns=["nanoobject", "experiment", "data"])
+        # Use a pivot table to rearrange df into a useful spare matrix
+        # There may be entities which did not have a specific experiment done on them,the locations corresponding to these will be filled with NaN values.
+        df = df.pivot(index='nanoobject', columns='experiment', values='data')
+        # Return a dataframe
+        return df
 
     def __next__(self) -> Entity:
         """To iterate over each entity in the Collection"""
