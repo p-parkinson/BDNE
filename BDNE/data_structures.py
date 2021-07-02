@@ -220,7 +220,7 @@ class EntityCollection:
     def sample(self, number_to_sample: int = 0) -> Union[Entity, EntityCollection]:
         """Return a random subset of k entities from the EntityCollection."""
         if number_to_sample > 0:
-            wid = random.choices(self.db_ids, k=number_to_sample)
+            wid = random.sample(self.db_ids, k=number_to_sample)
             # Select - return either an Entity or a EntityCollection
             if len(wid) == 1:
                 return Entity(wid[0])
