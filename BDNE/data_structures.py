@@ -156,6 +156,21 @@ class Entity:
             return stm.all()[0][0]
         else:
             raise KeyError('Measurement ID {} not found in database'.format(exp_id))
+            
+    def get_data(self):
+        """Get all the measurement data associated with this entity"""
+        # Check if we have downloaded experiment list yet
+        if not self.experiment_container:
+            self.populate_from_db()
+        # Retrieve experiment results from database
+        measurement_container = list(map(list, zip(*self.experiment_container)))[1]
+        #Return all experiment IDs and experimental data associated with this entity
+        #replace db.Experiment.ID with db.Experiment.type to index by experiment names not experiment IDs
+        stm = cfg.session.query(db.Experiment.type,db.Measurement.data)\
+            .select_from(db.Measurement) \
+            .join(db.Object).join(db.Entity).join(db.Experiment)\
+            .filter(db.Measurement.ID.in_(measurement_container))
+        return stm.all()  
 
 
 #################################################################
