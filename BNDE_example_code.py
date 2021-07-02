@@ -16,7 +16,7 @@ w = EntityCollection()
 # Populate from the database, EntityGroup 3
 w.load_entity_group(4)
 # List how many wires samples
-print('Wire Collection has {} wires'.format(len(w.db_ids)))
+print('Wire Collection has {} wires'.format(len(w)))
 
 #############
 # Get one wire to test at random
@@ -59,7 +59,7 @@ plt.xlabel('PL peak position')
 plt.ylabel('Frequency')
 plt.subplot(224)
 plt.hist(PL.collect()['processed'], 100)
-plt.title('PL intensity of {} wires'.format(len(w.db_ids)))
+plt.title('PL intensity of {} wires'.format(len(w)))
 plt.xlabel('Intensity (um)')
 plt.ylabel('Frequency')
 
